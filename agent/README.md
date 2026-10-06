@@ -9,7 +9,18 @@ Navigateur (PC Assistant)  ──signaling──►  Backend FastAPI  ◄──W
          └──────────────── WebRTC (écran en JPEG + commandes, chiffré) ───────────┘
 ```
 
-## Lancer
+## Lancer en une commande
+
+```powershell
+.\remote-agent\start-agent.ps1          # Windows (PowerShell), depuis n'importe quel dossier
+./remote-agent/start-agent.sh           # Linux / macOS
+```
+
+Le script se place dans le bon dossier, lit la clé d'API (`API_AUTH_TOKEN`) dans `backend/.env`, vérifie que Rust est installé et autorise la
+souris et le clavier. Options PowerShell : `-Server`, `-ApiKey`, `-Allow ""` (regarder seulement), `-Name`, `-Dev` (compilation plus rapide).
+Si PowerShell refuse d'exécuter le script : `powershell -ExecutionPolicy Bypass -File .\remote-agent\start-agent.ps1`.
+
+## Lancer à la main
 
 ```bash
 cd remote-agent
