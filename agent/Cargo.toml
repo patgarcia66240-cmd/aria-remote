@@ -1,0 +1,39 @@
+[package]
+name = "remote-agent"
+version = "0.1.0"
+edition = "2021"
+description = "Agent Remote de PC Assistant : capture écran, souris, clavier et WebRTC (voir docs/REMOTE_ARCHITECTURE.md)"
+license = "UNLICENSED"
+publish = false
+
+[dependencies]
+anyhow = "1"
+base64 = "0.22"
+bytes = "1"
+clap = { version = "4", features = ["derive", "env"] }
+dirs = "5"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+futures-util = "0.3"
+hex = "0.4"
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "io-std", "io-util", "signal"] }
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+webrtc = "0.14"
+
+# Capture, saisie et fenêtre de consentement natives : Windows seulement (ailleurs, source synthétique et saisie journalisée,
+# ce qui permet de développer et tester sans écran).
+[target.'cfg(windows)'.dependencies]
+enigo = "0.6"
+rfd = "0.15"
+xcap = "0.9"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+opt-level = "s"

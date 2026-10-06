@@ -891,3 +891,22 @@ FICHIERS + PRESSE-PAPIERS + AUDIO + TERMINAL
 ```
 
 **Le principe directeur est donc : une V1 petite, mais une architecture qui ne devra pas être jetée lorsque les fonctionnalités augmenteront.**
+
+---
+
+# 23. État de l'implémentation
+
+| Élément | État |
+| --- | --- |
+| Plugin backend `backend/plugins/remote/` (sessions, permissions, appairage, audit, signaling, état RECONNECTING) | fait, testé |
+| Identité Ed25519 : enregistrement signé et non rejouable, réponse WebRTC signée sur l'offre | fait, testé |
+| Passerelle WebSocket de l'agent (défi signé, consentement, reprise de session après coupure) | fait, testé |
+| STUN/TURN (`REMOTE_STUN_URLS`, `REMOTE_TURN_*`, identifiants TURN éphémères) | fait, vide par défaut |
+| Code d'appairage : 30 minutes par défaut, réglable (`REMOTE_PAIRING_CODE_TTL`) | fait |
+| Frontend : sous-onglet « Maintenance à distance » de la page Ordinateur (`RemoteControl.jsx`) | fait, testé |
+| `remote-agent/` (Rust) : identité, signaling, WebRTC, capture, souris, clavier | fait ; testé sous Linux (écran de test) et de bout en bout avec un vrai navigateur ; **compile pour Windows mais non essayé sur un vrai bureau Windows** |
+
+Écarts avec les schémas ci-dessus : l'écran est transporté en **images JPEG sur un canal de données WebRTC** (simple, sans encodeur vidéo) et non en
+flux vidéo H.264/VP8 ; le débit est donc plus élevé qu'AnyDesk. Un flux vidéo pourra remplacer ce canal sans toucher au signaling ni aux permissions.
+Le plugin est désactivé par défaut (`enabled_by_default: false`) : à activer dans la page Plugins. Détails de l'agent : `remote-agent/README.md`.
+

@@ -25,6 +25,7 @@ function Screen({ link, sinkRef, info, onClose, state, permissions }) {
   const lastMove = useRef(0)
   const canMouse = permissions.includes('control_mouse')
   const canKeyboard = permissions.includes('control_keyboard')
+  const ratio = info?.width && info?.height ? (info.width / info.height).toFixed(4) : '1.7778'
 
   // Les images arrivent par le canal « frames » : on les dessine dès qu'elles sont décodées, sans file d'attente.
   useEffect(() => {
@@ -70,8 +71,11 @@ function Screen({ link, sinkRef, info, onClose, state, permissions }) {
         </p>
         <button type="button" onClick={onClose} className={SECONDARY}>Déconnecter</button>
       </div>
+      {/* Hauteur bornée (la barre du dessus reste visible) SANS bandes noires : le canvas garde le ratio de l'écran distant, ce qui garde
+          aussi exacte la position de la souris (coordonnées normalisées sur toute la surface du canvas). */}
       <canvas ref={canvasRef} tabIndex={0} aria-label="Écran distant" width="16" height="9" {...mouse} {...keyboard}
-        className="aspect-video w-full touch-none rounded-lg bg-black outline-none focus:ring-2 focus:ring-blue-400" />
+        style={{ aspectRatio: `${ratio}`, width: `min(100%, calc((100vh - 22rem) * ${ratio}))` }}
+        className="mx-auto block touch-none rounded-lg bg-black outline-none focus:ring-2 focus:ring-blue-400" />
       {canKeyboard && <p className="mt-2 text-xs text-gray-500">Clique sur l'écran pour envoyer le clavier à l'appareil.</p>}
     </div>
   )
@@ -208,7 +212,7 @@ export default function RemoteControl({ isActive = true }) {
 
           <form onSubmit={pair} className={CARD}>
             <label htmlFor="remote-code" className="text-sm font-semibold text-gray-200">Code d'appairage</label>
-            <p className="mt-1 text-xs text-gray-400">Le code est affiché par l'agent sur l'appareil à contrôler ; il vaut 5 minutes et ne sert qu'une fois.</p>
+            <p className="mt-1 text-xs text-gray-400">Le code est affiché par l'agent sur l'appareil à contrôler ; il a une durée limitée (30 minutes par défaut) et ne sert qu'une fois.</p>
             <div className="mt-3 flex gap-2">
               <input id="remote-code" inputMode="numeric" autoComplete="off" maxLength={6} value={code} placeholder="483921"
                 onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))}

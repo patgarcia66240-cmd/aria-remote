@@ -191,11 +191,14 @@ class RemoteService:
                 except Exception:        # noqa: BLE001 — l'agent est injoignable : il n'y a rien d'autre à faire
                     pass
 
-    def _start_reconnecting(self, session: Session) -> None:
+    def _start_reconnecting(self, session: Session, *, renegotiate: bool = True) -> None:
+        """`renegotiate=False` : seul le canal WebSocket de l'agent est tombé, le lien WebRTC peut être intact — on garde la négociation pour que
+        l'agent puisse reprendre la session telle quelle (`agent_resumed`)."""
         self._move(session, SessionState.RECONNECTING)
-        session.offer = session.answer = ""
-        session.ice.clear()
-        session.agent_ice.clear()
+        if renegotiate:
+            session.offer = session.answer = ""
+            session.ice.clear()
+            session.agent_ice.clear()
         self.audit.record("REMOTE_RECONNECTING", device_id=session.device_id, session_id=session.session_id)
 
     async def reconnect(self, session_id: str) -> Session:
@@ -218,10 +221,22 @@ class RemoteService:
             if session.device_id != device_id or session.state not in states.ACTIVE:
                 continue
             if session.state is SessionState.CONNECTED:
-                self._start_reconnecting(session)
+                self._start_reconnecting(session, renegotiate=False)
             elif session.state is not SessionState.RECONNECTING:
                 self._move(session, SessionState.DISCONNECTED)
                 self.audit.record("REMOTE_DISCONNECTED", device_id=device_id, session_id=session.session_id, result="agent_lost")
+
+    def agent_resumed(self, session_id: str, device_id: str) -> Session:
+        """L'agent, de retour et authentifié, annonce que sa session WebRTC n'a pas bougé : la session redevient CONNECTED. Refusé si le contrôleur a
+        entre-temps demandé une renégociation (plus de réponse en mémoire) : c'est alors la nouvelle offre qui fait foi."""
+        session = self.session(session_id)
+        if session.device_id != device_id:
+            raise PermissionDenied("Cette session n'appartient pas à cet appareil.")
+        if session.state is not SessionState.RECONNECTING or not session.answer:
+            raise InvalidState("Rien à reprendre : la session doit être renégociée.")
+        self._move(session, SessionState.CONNECTED)
+        self.audit.record("REMOTE_RECONNECTED", device_id=device_id, session_id=session_id, result="resumed")
+        return session
 
     def agent_ended(self, session_id: str, device_id: str) -> None:
         """L'utilisateur de l'appareil a coupé la session (droit prévu par la section 17 du doc) : on la termine, sans rappeler l'agent."""

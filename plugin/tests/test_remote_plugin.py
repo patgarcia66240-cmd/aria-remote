@@ -112,16 +112,24 @@ def test_permissions_are_separate_and_only_v1_can_be_granted():
         permissions.ensure_granted(frozenset({Permission.CONTROL_KEYBOARD}), frozenset({Permission.VIEW_SCREEN}))
 
 
+def test_the_pairing_code_lifetime_is_configurable_within_sane_bounds(monkeypatch):
+    for configured, expected in ((600, 600), (5, 60), (10 ** 9, 86400), (1800, 1800)):
+        monkeypatch.setattr(security.settings, "REMOTE_PAIRING_CODE_TTL", configured, raising=False)
+        assert PairingBook().ttl == expected
+    assert PairingBook(ttl=120).ttl == 120                 # un test ou un appelant peut aussi fixer la durée directement
+
+
 def test_pairing_codes_expire_work_once_and_lock_after_repeated_failures():
     clock = Clock()
     book = PairingBook(clock)
+    assert book.ttl == 1800                                # 30 minutes par défaut
     code = book.issue("dev_a")
     assert len(code) == 6 and code.isdigit()
     assert book.redeem(code) == "dev_a"
     with pytest.raises(PairingFailed):
         book.redeem(code)                                  # usage unique
     old = book.issue("dev_b")
-    clock.now += 301
+    clock.now += 1801
     with pytest.raises(PairingFailed):
         book.redeem(old)                                   # expiré
     fresh = book.issue("dev_c")
@@ -353,6 +361,31 @@ def test_losing_the_agent_reconnects_an_established_session_and_drops_a_pending_
     assert established.state is SessionState.RECONNECTING
 
 
+def test_a_session_survives_a_websocket_drop_when_the_agent_resumes_it(remote):
+    agent = paired(remote)
+    session = connect(remote, agent)
+    remote.service.agent_lost(DEVICE)
+    assert session.state is SessionState.RECONNECTING and session.answer          # la négociation est conservée : le lien peut être intact
+    with pytest.raises(PermissionDenied):
+        remote.service.agent_resumed(session.session_id, "dev_autre_0001")
+    assert remote.service.agent_resumed(session.session_id, DEVICE).state is SessionState.CONNECTED
+    with pytest.raises(InvalidState, match="Rien à reprendre"):
+        remote.service.agent_resumed(session.session_id, DEVICE)                  # déjà reprise
+    run(remote.service.reconnect(session.session_id))                              # le contrôleur renégocie : la négociation est effacée
+    with pytest.raises(InvalidState, match="renégociée"):
+        remote.service.agent_resumed(session.session_id, DEVICE)
+
+
+def test_messages_match_the_agent_wire_format():
+    """Mêmes octets que remote-agent/src/identity.rs (test messages_have_the_exact_wire_format_of_the_backend)."""
+    assert identity.register_message("dev_bureau_0001", "Bureau", 1700000000, "abcdefghijklmnop") == \
+        b"pc-assistant-remote-v1|register|dev_bureau_0001|Bureau|1700000000|abcdefghijklmnop"
+    assert identity.agent_auth_message("dev_bureau_0001", "n0nce") == b"pc-assistant-remote-v1|agent|dev_bureau_0001|n0nce"
+    assert identity.sha256_hex("abc") == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    assert identity.answer_message("sess_x", "offre", "reponse").decode() == \
+        f"pc-assistant-remote-v1|answer|sess_x|{identity.sha256_hex('offre')}|{identity.sha256_hex('reponse')}"
+
+
 def test_the_device_user_can_end_a_session_but_only_their_own(remote):
     agent = paired(remote)
     session = connect(remote, agent)
@@ -504,7 +537,7 @@ def test_http_flow_from_registration_to_disconnection(client):
     agent = Agent()
     registered = client.post("/api/remote/devices/register", json=agent.register_args()).json()
     code = registered["pairing_code"]
-    assert registered["expires_in"] == 300 and "public_key" not in registered["device"]
+    assert registered["expires_in"] == 1800 and "public_key" not in registered["device"]
     assert client.post("/api/remote/pair", json={"code": code}).json()["device"]["paired"] is True
     assert client.get("/api/remote/devices").json()["devices"][0]["online"] is True
     assert client.get(f"/api/remote/devices/{DEVICE}").json()["name"] == "Bureau"

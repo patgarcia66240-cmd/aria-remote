@@ -193,6 +193,8 @@ async def _agent_message(connection: AgentConnection, message: dict) -> None:
         service.add_agent_ice(session_id, str(message.get("candidate", "")), device_id)
     elif kind == "grant":
         service.set_granted(device_id, [str(p) for p in message.get("permissions", [])])
+    elif kind == "resume":
+        service.agent_resumed(session_id, device_id)
     elif kind == "bye":
         service.agent_ended(session_id, device_id)
     elif kind != "ping":
