@@ -1,0 +1,12 @@
+{
+  "id": "remote",
+  "name": "Contrôle à distance",
+  "version": "0.1.0",
+  "description": "Squelette du contrôle à distance d'un PC (voir docs/REMOTE_ARCHITECTURE.md) : appairage par code, permissions, sessions, signaling. L'agent Windows n'existe pas encore : sans lui, aucune session ne peut s'ouvrir.",
+  "router_prefix": "/api/remote",
+  "permission": "EXTERNAL",
+  "enabled_by_default": false,
+  "chat_handler": true,
+  "chat_handler_order": 70,
+  "chat_error_message": "Le contrôle à distance est indisponible"
+}

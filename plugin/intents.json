@@ -1,0 +1,43 @@
+{
+  "lexicon": {
+    "CONNECTER": ["connecte", "connecter", "prends le controle", "prendre le controle", "controle", "controler", "pilote", "piloter"],
+    "DECONNECTER": ["deconnecte", "deconnecter", "coupe", "couper", "ferme", "fermer", "termine", "arrete", "stoppe"],
+    "MOI": ["moi", "nous"],
+    "PREP": ["a", "au", "sur", "de", "du", "d'", "avec"],
+    "DET": ["le", "la", "l'", "les", "mon", "ma", "mes"],
+    "PC": ["pc", "ordinateur", "ordi", "poste", "machine"],
+    "DISTANCE": ["remote", "distance", "distant", "distants", "distante", "distantes"],
+    "SESSION": ["session", "connexion"],
+    "ETAT": ["etat", "statut", "status", "liste", "quels", "quel"]
+  },
+  "intents": {
+    "remote_disconnect": {
+      "label": "Couper la session de contrôle à distance",
+      "phrases": [
+        "{DECONNECTER} {?DET} {SESSION} {?PREP} {DISTANCE}",
+        "{DECONNECTER} {?DET} controle {?PREP} {DISTANCE}",
+        "{DECONNECTER} {?DET} {PC} {DISTANCE}"
+      ],
+      "examples": ["déconnecte la session remote", "coupe le contrôle à distance", "ferme la connexion distante"],
+      "negatives": ["ferme la porte", "coupe le son", "ferme la session windows"]
+    },
+    "remote_status": {
+      "label": "Appareils et état du contrôle à distance",
+      "phrases": [
+        "{ETAT} {?DET} {?PC} {DISTANCE}",
+        "{ETAT} {?PREP} {?DET} {PC} {DISTANCE}",
+        "{ETAT} {?PREP} {?DET} controle {?PREP} {DISTANCE}"
+      ],
+      "examples": ["statut remote", "quels pc distants", "état du contrôle à distance"],
+      "negatives": ["statut de la commande", "quel temps fait-il"]
+    },
+    "remote_connect": {
+      "label": "Se connecter à un PC distant",
+      "phrases": [
+        "{CONNECTER} {?MOI} {?PREP} {?DET} {PC} {?PREP} {?DET} {name:rest}"
+      ],
+      "examples": ["connecte-moi au PC du bureau", "prends le contrôle du PC salon", "connecte moi à l'ordinateur de Marie"],
+      "negatives": ["connecte-moi au wifi", "contrôle la température", "connecte le pc"]
+    }
+  }
+}
