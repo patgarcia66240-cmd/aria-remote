@@ -1,12 +1,22 @@
 {
   "id": "remote",
   "name": "Contrôle à distance",
-  "version": "0.1.0",
-  "description": "Squelette du contrôle à distance d'un PC (voir docs/REMOTE_ARCHITECTURE.md) : appairage par code, permissions, sessions, signaling. L'agent Windows n'existe pas encore : sans lui, aucune session ne peut s'ouvrir.",
+  "version": "0.2.0",
+  "description": "Contrôle d'un PC distant (voir docs/REMOTE_ARCHITECTURE.md) : appareils appairés par code et clé Ed25519, permissions, sessions, signaling et passerelle WebSocket vers l'agent Windows (remote-agent/). Rangé dans la page Ordinateur.",
   "router_prefix": "/api/remote",
   "permission": "EXTERNAL",
   "enabled_by_default": false,
   "chat_handler": true,
   "chat_handler_order": 70,
-  "chat_error_message": "Le contrôle à distance est indisponible"
+  "chat_error_message": "Le contrôle à distance est indisponible",
+  "frontend": {
+    "component": "RemoteControl",
+    "tab": {
+      "id": "remote",
+      "label": "Maintenance à distance",
+      "icon": "system",
+      "order": 65,
+      "group": "computer"
+    }
+  }
 }

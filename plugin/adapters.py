@@ -28,6 +28,9 @@ class NoAgentGateway:
     async def close_session(self, session_id: str) -> None:
         return None
 
+    async def send_signal(self, session: Session, kind: str, value: str) -> None:
+        raise AgentUnavailable("Aucun agent Remote n'est installé.")
+
 
 class LoopbackAgentGateway:
     """Agent simulé en mémoire (tests, développement de l'interface) : `online` = appareils joignables, `refuse` = appareils qui refusent."""
@@ -37,6 +40,7 @@ class LoopbackAgentGateway:
         self.refuse = set(refuse or ())
         self.opened: list[str] = []
         self.closed: list[str] = []
+        self.signals: list[tuple[str, str, str]] = []
 
     async def is_online(self, device_id: str) -> bool:
         return device_id in self.online
@@ -50,6 +54,9 @@ class LoopbackAgentGateway:
 
     async def close_session(self, session_id: str) -> None:
         self.closed.append(session_id)
+
+    async def send_signal(self, session: Session, kind: str, value: str) -> None:
+        self.signals.append((session.session_id, kind, value))
 
 
 class MemoryDeviceStore:

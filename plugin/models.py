@@ -43,11 +43,13 @@ class Session:
     session_id: str = field(default_factory=lambda: "sess_" + secrets.token_urlsafe(12))
     state: SessionState = SessionState.CREATED
     created_at: float = field(default_factory=time.time)
+    state_changed_at: float = field(default_factory=time.monotonic)
     offer: str = ""
     answer: str = ""
-    ice: list[str] = field(default_factory=list)
+    ice: list[str] = field(default_factory=list)             # candidats ICE du contrôleur
+    agent_ice: list[str] = field(default_factory=list)       # candidats ICE de l'agent
 
     def to_dict(self) -> dict[str, Any]:
         return {"session_id": self.session_id, "device_id": self.device_id, "state": self.state.value, "created_at": self.created_at,
                 "permissions": sorted(p.value for p in self.permissions), "has_offer": bool(self.offer), "has_answer": bool(self.answer),
-                "ice_candidates": len(self.ice)}
+                "ice_candidates": len(self.ice), "agent_ice_candidates": len(self.agent_ice)}
