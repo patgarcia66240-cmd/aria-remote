@@ -32,8 +32,14 @@ enigo = "0.6"
 rfd = "0.15"
 xcap = "0.9"
 
+# Compilation rapide d'abord : « lto = true » + « codegen-units = 1 » rendaient l'étape finale (368/369) très longue et gourmande en mémoire avec
+# webrtc, pour un gain de vitesse négligeable ici (le travail lourd est le JPEG, déjà optimisé). Les dépendances sont optimisées même en dev,
+# sinon l'encodage JPEG y est trop lent pour un flux fluide.
 [profile.release]
-lto = true
-codegen-units = 1
+opt-level = 2
+lto = false
+codegen-units = 16
 strip = true
-opt-level = "s"
+
+[profile.dev.package."*"]
+opt-level = 2
