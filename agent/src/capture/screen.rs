@@ -11,18 +11,21 @@ pub const MAX_WIDTH: u32 = 1600;      // au-delà, l'image est réduite : le dé
 pub const JPEG_QUALITY: u8 = 55;
 
 /// Image de test : dégradé et barre qui se déplace (on voit tout de suite si le flux est vivant).
+#[cfg_attr(windows, allow(dead_code))]      // sous Windows, l'écran réel (xcap) la remplace ; elle sert ailleurs et dans les tests
 pub struct SyntheticScreen {
     width: u32,
     height: u32,
     tick: u32,
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 impl SyntheticScreen {
     pub fn new(width: u32, height: u32) -> Self {
         Self { width, height, tick: 0 }
     }
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 impl ScreenSource for SyntheticScreen {
     fn capture(&mut self) -> Result<Frame> {
         let bar = (self.tick * 16) % self.width.max(1);

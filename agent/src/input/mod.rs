@@ -99,11 +99,13 @@ pub fn apply(message: &Control, allowed: &HashSet<Permission>, sink: &mut dyn In
 }
 
 /// Saisie qui ne touche à rien : développement et tests hors Windows.
+#[cfg_attr(windows, allow(dead_code))]      // sous Windows, la saisie réelle (enigo) la remplace ; elle sert ailleurs et dans les tests
 pub struct LogInput {
     pub log: Vec<String>,
     echo: bool,
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 impl LogInput {
     #[cfg(test)]
     pub fn new() -> Self {
@@ -123,6 +125,7 @@ impl LogInput {
     }
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 impl InputSink for LogInput {
     fn display_size(&self) -> (u32, u32) { (1280, 720) }
     fn move_to(&mut self, x: i32, y: i32) { self.record(format!("move {x},{y}")); }
