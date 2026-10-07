@@ -1,12 +1,13 @@
-# Variante « sans SSH » pour le VPS Hostinger (modèle Ubuntu avec n8n et Traefik) : le code est récupéré directement depuis GitHub à la
-# construction de l'image (jeton en LECTURE SEULE), donc ce fichier se suffit à lui-même et peut être déployé depuis hPanel (Docker › Compose) ou l'API.
-# Variables obligatoires : GIT_TOKEN, DOMAIN, RENDEZVOUS_AGENT_KEY, RENDEZVOUS_CONTROLLER_KEY, TURN_SECRET.
-# Réglages de Traefik (valeurs du modèle n8n de Hostinger) : TRAEFIK_NETWORK=n8n_default, TRAEFIK_ENTRYPOINT=websecure, TRAEFIK_CERT_RESOLVER=mytlschallenge.
+# Variante « sans SSH » pour le VPS Hostinger (modèle Ubuntu avec n8n et Traefik), déployable depuis hPanel (Docker › Compose) ou l'API Hostinger.
+# En DEUX temps, car l'interface Docker de Hostinger ne construit pas d'image à partir d'un dépôt :
+#   1) projet « pc-rendezvous-build » (docker-compose.hostinger-build.yml) : un conteneur éphémère construit l'image « pc-rendezvous:local » sur le VPS ;
+#   2) projet « pc-rendezvous » (CE fichier) : démarre cette image + le relais coturn.
+# Variables : DOMAIN, RENDEZVOUS_AGENT_KEY, RENDEZVOUS_CONTROLLER_KEY, TURN_SECRET ; Traefik (valeurs du modèle n8n) : TRAEFIK_NETWORK=n8n_default,
+# TRAEFIK_ENTRYPOINT=websecure, TRAEFIK_CERT_RESOLVER=mytlschallenge. Pour mettre à jour : relancer le projet 1 puis redémarrer le projet 2.
 services:
   rendezvous:
-    build:
-      context: https://x-access-token:${GIT_TOKEN:?GIT_TOKEN manquant}@github.com/patgarcia66240-cmd/pc-assistant.git#chore/frontend-audit-p1
-      dockerfile: remote-rendezvous/Dockerfile
+    image: pc-rendezvous:local
+    pull_policy: never
     restart: unless-stopped
     environment:
       RENDEZVOUS_AGENT_KEY: ${RENDEZVOUS_AGENT_KEY:?manquant}
@@ -41,7 +42,7 @@ services:
       --fingerprint
       --use-auth-secret --static-auth-secret=${TURN_SECRET}
       --realm=${DOMAIN}
-      --no-cli --no-tls --no-dtls
+      --no-tls
       --no-multicast-peers
       --denied-peer-ip=0.0.0.0-0.255.255.255
       --denied-peer-ip=10.0.0.0-10.255.255.255

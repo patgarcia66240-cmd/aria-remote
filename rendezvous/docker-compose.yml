@@ -48,7 +48,7 @@ services:
       --fingerprint
       --use-auth-secret --static-auth-secret=${TURN_SECRET}
       --realm=${DOMAIN}
-      --no-cli --no-tls --no-dtls
+      --no-tls
       --no-multicast-peers
       --denied-peer-ip=0.0.0.0-0.255.255.255
       --denied-peer-ip=10.0.0.0-10.255.255.255

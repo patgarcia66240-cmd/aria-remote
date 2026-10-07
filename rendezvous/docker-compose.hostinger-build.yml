@@ -1,0 +1,15 @@
+# Étape 1 du déploiement Hostinger (voir docker-compose.hostinger.yml) : construit l'image « pc-rendezvous:local » directement sur le VPS.
+# Variable : GIT_TOKEN = jeton GitHub en LECTURE SEULE sur ce dépôt (Contents : Read-only). Le conteneur s'arrête après la construction (« BUILD-OK » dans ses journaux).
+# Il monte le socket Docker pour piloter la construction : à ne laisser que le temps du build (supprimer le projet ensuite si le jeton expire).
+services:
+  builder:
+    image: docker:27-cli
+    restart: "no"
+    environment:
+      GIT_TOKEN: ${GIT_TOKEN:?manquant}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command:
+      - sh
+      - -c
+      - docker build -t pc-rendezvous:local -f remote-rendezvous/Dockerfile "https://x-access-token:$${GIT_TOKEN}@github.com/patgarcia66240-cmd/pc-assistant.git#chore/frontend-audit-p1" && echo BUILD-OK
