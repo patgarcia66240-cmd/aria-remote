@@ -8,6 +8,7 @@ publish = false
 
 [dependencies]
 anyhow = "1"
+axum = "0.8"
 base64 = "0.22"
 bytes = "1"
 clap = { version = "4", features = ["derive", "env"] }
@@ -27,6 +28,9 @@ webrtc = "0.14"
 
 # Capture, saisie et fenêtre de consentement natives : Windows seulement (ailleurs, source synthétique et saisie journalisée,
 # ce qui permet de développer et tester sans écran).
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+
 [target.'cfg(windows)'.dependencies]
 enigo = "0.6"
 rfd = "0.15"

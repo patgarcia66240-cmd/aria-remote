@@ -105,8 +105,19 @@ pub async fn register(server: &str, api_key: &str, config: &Config, identity: &I
 pub async fn connect(server: &str, api_key: &str, device_id: &str) -> Result<Socket> {
     let mut request = websocket_url(server, device_id).into_client_request()?;
     request.headers_mut().insert("x-api-key", api_key.parse().context("clé d'API invalide")?);
-    let (socket, _) = connect_async(request).await.context("connexion WebSocket impossible (appareil pas encore appairé ?)")?;
-    Ok(socket)
+    match connect_async(request).await {
+        Ok((socket, _)) => Ok(socket),
+        Err(tokio_tungstenite::tungstenite::Error::Http(response)) if response.status().as_u16() == 401 => {
+            bail!("clé d'API refusée par PC Assistant (401) : vérifie la clé saisie")
+        }
+        Err(tokio_tungstenite::tungstenite::Error::Http(response)) if response.status().as_u16() == 403 => {
+            bail!("clé d'API incorrecte (403) : vérifie la clé saisie")
+        }
+        Err(tokio_tungstenite::tungstenite::Error::Http(response)) if response.status().as_u16() == 404 => {
+            bail!("le plugin « Contrôle à distance » n'est pas activé dans PC Assistant (404) : active-le dans la page Plugins")
+        }
+        Err(error) => Err(error).context("connexion impossible (PC Assistant éteint, mauvaise adresse ou pare-feu ?)"),
+    }
 }
 
 pub async fn send(socket: &mut Socket, message: &ClientMessage) -> Result<()> {

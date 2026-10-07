@@ -55,6 +55,7 @@ impl Peer {
         session_id: String,
         out: UnboundedSender<ClientMessage>,
         on_channel: Arc<dyn Fn(Arc<RTCDataChannel>) + Send + Sync>,
+        on_state: Arc<dyn Fn(RTCPeerConnectionState) + Send + Sync>,
     ) -> Result<Self> {
         let config = RTCConfiguration {
             ice_servers: ice
@@ -83,8 +84,9 @@ impl Peer {
             on_channel(channel);
             Box::pin(async {})
         }));
-        pc.on_peer_connection_state_change(Box::new(|state| {
+        pc.on_peer_connection_state_change(Box::new(move |state| {
             eprintln!("[webrtc] état : {state}");
+            on_state(state);
             Box::pin(async {})
         }));
         Ok(Self { pc })
