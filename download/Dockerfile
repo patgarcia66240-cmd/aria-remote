@@ -11,10 +11,12 @@ COPY fetch.sh /dl/fetch.sh
 RUN sh /dl/fetch.sh
 COPY index.html /dl/index.html
 RUN sed -i "s/__VERSION__/$(cat version.txt)/g; s/__SHA256__/$(cat sha256.txt)/g; s/__SIZE__/$(cat size.txt)/g" index.html \
- && sed -i -e "/__VERSIONS__/{r rows.html" -e "d}" index.html
+ && sed -i -e "/__VERSIONS__/{r rows.html" -e "d}" index.html \
+ && sed -i -e "/__DESKTOP__/{r desktop.html" -e "d}" index.html
 
 FROM nginx:1.27-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=fetch /dl/index.html /dl/remote-agent.exe /dl/remote-agent.exe.sha256 /usr/share/nginx/html/
 COPY --from=fetch /dl/versions /usr/share/nginx/html/versions
+COPY --from=fetch /dl/desktop /usr/share/nginx/html/desktop
 EXPOSE 80

@@ -42,3 +42,24 @@ while [ "${i}" -lt "${count}" ]; do
   i=$((i + 1))
 done
 echo "${count} version(s) récupérée(s)."
+
+# -- Application de bureau (étiquettes desktop-v*) : facultative, seule la dernière version est proposée. Sans version publiée, la page affiche « Bientôt disponible ».
+mkdir -p desktop
+latest="$(get -H "Accept: application/vnd.github+json" "${api}?per_page=50" \
+  | jq -c '[.[] | select(.draft | not) | select(.tag_name | startswith("desktop-v"))][0] // empty')"
+if [ -n "${latest}" ]; then
+  dver="$(echo "${latest}" | jq -r '.tag_name | ltrimstr("desktop-v")')"
+  for name in aria-remote-desktop.exe aria-remote-desktop.exe.sha256; do
+    id="$(echo "${latest}" | jq -r --arg n "${name}" '[.assets[] | select(.name == $n)][0].id // empty')"
+    [ -n "${id}" ] || { echo "Fichier ${name} absent de la version desktop ${dver}"; exit 1; }
+    get -H "Accept: application/octet-stream" -o "desktop/${name}" "${api}/assets/${id}"
+  done
+  dsum="$(cut -d' ' -f1 desktop/aria-remote-desktop.exe.sha256)"
+  [ "$(sha256sum desktop/aria-remote-desktop.exe | cut -d' ' -f1)" = "${dsum}" ] || { echo "Empreinte SHA-256 différente pour le desktop ${dver}"; exit 1; }
+  dsize="$(du -h desktop/aria-remote-desktop.exe | cut -f1)"
+  printf '<a class="cta small" href="/desktop/aria-remote-desktop.exe" download><svg class="i"><use href="#i-download"/></svg>Télécharger pour Windows</a>\n<p class="meta">Version %s · %s · aucune installation</p>\n<code class="hash" title="Empreinte SHA-256">%s</code>\n' "${dver}" "${dsize}" "${dsum}" > desktop.html
+  echo "Application de bureau ${dver} récupérée."
+else
+  printf '<span class="soon"><svg class="i"><use href="#i-play"/></svg>Bientôt disponible</span>\n<p class="meta">Elle est en cours de développement.</p>\n' > desktop.html
+  echo "Pas de version desktop publiée : « Bientôt disponible »."
+fi

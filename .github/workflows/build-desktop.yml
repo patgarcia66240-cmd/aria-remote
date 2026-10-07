@@ -1,0 +1,87 @@
+# Compile l'application de bureau (desktop/) pour Windows et publie aria-remote-desktop.exe.
+#   - À chaque changement de desktop/ : compilation sous Windows (l'exe est gardé 30 jours comme « artefact » de l'exécution).
+#   - Avec une étiquette « desktop-vX.Y.Z » (git tag desktop-v0.1.0 && git push origin desktop-v0.1.0) : l'exe et son empreinte SHA-256
+#     sont joints à une version (Release), d'où la page de téléchargement les récupère.
+#   - L'étiquette doit égaler la version de desktop/Cargo.toml ET de desktop/tauri.conf.json, sinon la compilation s'arrête.
+name: Desktop Windows
+
+on:
+  push:
+    branches: [main]
+    paths: ['desktop/**', '.github/workflows/build-desktop.yml']
+    tags: ['desktop-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Version de l'étiquette = version de l'application
+        if: ${{ startsWith(github.ref, 'refs/tags/desktop-v') }}
+        shell: pwsh
+        run: |
+          $cargo = (Select-String -Path Cargo.toml -Pattern '^version\s*=\s*"([^"]+)"' | Select-Object -First 1).Matches[0].Groups[1].Value
+          $conf = (Get-Content tauri.conf.json -Raw | ConvertFrom-Json).version
+          $tag = "${env:GITHUB_REF_NAME}".Substring('desktop-v'.Length)
+          if ($cargo -ne $tag -or $conf -ne $tag) { throw "L'étiquette ($tag) ne correspond pas à Cargo.toml ($cargo) et tauri.conf.json ($conf) : aligne les versions, puis recrée l'étiquette." }
+          Write-Host "Version $cargo"
+
+      - name: Tests
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        run: cargo test --release
+
+      - name: Compilation (release, sans installateur)
+        run: |
+          npm install
+          npx tauri build --no-bundle
+
+      - name: Empreinte SHA-256
+        shell: pwsh
+        run: |
+          Copy-Item "target/release/ARIA Remote.exe" target/release/aria-remote-desktop.exe
+          $hash = (Get-FileHash target/release/aria-remote-desktop.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  aria-remote-desktop.exe" | Out-File -Encoding ascii target/release/aria-remote-desktop.exe.sha256
+          Write-Host "SHA-256 : $hash"
+          "### aria-remote-desktop.exe`nSHA-256 : ``$hash``" | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aria-remote-desktop-windows
+          path: |
+            desktop/target/release/aria-remote-desktop.exe
+            desktop/target/release/aria-remote-desktop.exe.sha256
+          retention-days: 30
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: aria-remote-desktop-windows
+      - name: Publier la version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" aria-remote-desktop.exe aria-remote-desktop.exe.sha256 \
+            --repo "${GITHUB_REPOSITORY}" --title "ARIA Remote Desktop ${GITHUB_REF_NAME#desktop-v}" \
+            --notes "Application de bureau ARIA Remote pour Windows 64 bits. Empreinte SHA-256 dans aria-remote-desktop.exe.sha256." --verify-tag

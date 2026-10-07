@@ -96,6 +96,17 @@
   .hash { display:block; margin-top:8px; padding:12px 14px; border-radius:10px; background:var(--g950); border:1px solid var(--g700); font:13.5px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace; color:var(--g200); word-break:break-all; user-select:all; cursor:text; }
 
 
+  .apps { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
+  .app { display:flex; flex-direction:column; align-items:flex-start; gap:10px; padding:28px; border:1px solid var(--g700); border-radius:20px; background:rgba(23,31,46,.45); }
+  .app .role { font-size:13px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--b300); }
+  .app h3 { margin:0; font-size:22px; }
+  .app p { margin:0; color:var(--g400); font-size:16px; }
+  .app .cta.small { padding:12px 22px; font-size:16px; min-height:48px; margin-top:8px; }
+  .app .meta { font-size:14px; }
+  .app .hash { display:block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; background:var(--g950); border:1px solid var(--g700); border-radius:8px; padding:5px 10px; font-size:12px; color:var(--g300); user-select:all; }
+  .soon { display:inline-flex; align-items:center; gap:10px; margin-top:8px; padding:12px 22px; border-radius:14px; font-weight:600; color:var(--g300); background:var(--g950); border:1px dashed var(--g700); }
+  .soon svg { width:20px; height:20px; }
+  @media (max-width:760px) { .apps { grid-template-columns:1fr; } }
   .versions { list-style:none; margin:0; padding:0; border:1px solid var(--g700); border-radius:16px; overflow:hidden; background:rgba(23,31,46,.45); }
   .ver { display:grid; grid-template-columns:minmax(120px,1.1fr) 100px 70px minmax(0,2fr) auto; gap:6px 18px; align-items:center; padding:14px 20px; }
   .ver + .ver { border-top:1px solid var(--g700); }
@@ -298,6 +309,26 @@
 <line x1="46" y1="154" x2="274" y2="154" stroke="#232d40"/>
 <text x="46" y="180" font-size="13.5" font-weight="700" fill="#fff">Utiliser le clavier</text><text x="46" y="195" font-size="10.5" fill="#96a1b6">Taper du texte et des raccourcis</text><rect x="236" y="166" width="42" height="24" rx="12" fill="#2a3550"/><circle cx="244" cy="178" r="9" fill="#7d899f"/>
 </svg></figure>
+      </div>
+    </section>
+
+    <section class="block" aria-labelledby="deux">
+      <h2 id="deux">Deux programmes, selon le PC</h2>
+      <p class="sub" style="margin-bottom:24px">L'agent se met sur le PC qu'on contrôle. L'application de bureau se met sur le PC qui commande.</p>
+      <div class="apps">
+        <article class="app">
+          <span class="role">Sur le PC à contrôler</span>
+          <h3>Agent Remote</h3>
+          <p>Affiche le code d'appairage et demande ton accord à chaque prise de contrôle.</p>
+          <a class="cta small" href="/remote-agent.exe" download><svg class="i"><use href="#i-download"/></svg>Télécharger pour Windows</a>
+          <p class="meta">Version __VERSION__ · __SIZE__ · aucune installation</p>
+        </article>
+        <article class="app">
+          <span class="role">Sur le PC qui commande</span>
+          <h3>ARIA Remote Desktop</h3>
+          <p>Choisis un appareil, saisis son code, vois son écran et pilote souris et clavier, sans passer par ARIA.</p>
+__DESKTOP__
+        </article>
       </div>
     </section>
 
