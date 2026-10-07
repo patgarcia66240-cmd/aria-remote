@@ -71,6 +71,8 @@
   .dialog { width: 100%; max-width: 400px; background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 24px; box-shadow: 0 24px 60px rgba(0,0,0,.55); }
   .dialog .icon { width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center; font-size: 28px; margin: 0 auto 12px; background: rgba(251,191,36,.14); }
   .dialog h3 { margin: 0; text-align: center; font-size: 19px; } .dialog p { text-align: center; color: var(--muted); margin: 8px 0 0; }
+  .dialog .icon.bad { background: rgba(248,113,113,.14); }
+  .dialog .actions { gap: 10px; } .dialog .actions button { flex: 1; }
   .dialog .chips { justify-content: center; margin: 14px 0 4px; }
   .timer { text-align: center; margin-top: 10px; font-size: 12.5px; color: var(--muted); }
   [hidden] { display: none !important; }
@@ -145,6 +147,15 @@
     <div class="chips" id="consent-chips"></div>
     <div class="timer" id="consent-timer"></div>
     <div class="actions"><button class="ghost" id="refuse">Refuser</button><button class="ok" id="accept">Autoriser</button></div>
+  </div>
+</div>
+
+<div class="modal" id="quit-modal" role="dialog" aria-modal="true" aria-labelledby="quit-title">
+  <div class="dialog">
+    <div class="icon bad">⏻</div>
+    <h3 id="quit-title">Arrêter l'agent ?</h3>
+    <p>Cet appareil ne pourra plus être contrôlé tant que tu ne l'auras pas relancé. Une session en cours sera coupée.</p>
+    <div class="actions" style="margin-top:20px"><button class="ghost" id="quit-cancel">Annuler</button><button class="danger" id="quit-confirm">Arrêter l'agent</button></div>
   </div>
 </div>
 
@@ -235,7 +246,15 @@ $('change-server').onclick = $('settings').onclick = () => { editingSetup = true
 $('accept').onclick = () => act('/api/consent', { session_id: $('accept').dataset.id, accept: true })
 $('refuse').onclick = () => act('/api/consent', { session_id: $('refuse').dataset.id, accept: false })
 $('stop').onclick = () => act('/api/stop')
-$('quit').onclick = () => { if (confirm('Arrêter l\'agent ? Cet appareil ne pourra plus être contrôlé.')) call('/api/quit', {}).finally(() => { document.body.innerHTML = '<p style="padding:40px;text-align:center">Agent arrêté. Tu peux fermer cette fenêtre.</p>' }) }
+const quitModal = (open) => { $('quit-modal').classList.toggle('on', open); if (open) $('quit-cancel').focus() }
+$('quit').onclick = () => quitModal(true)
+$('quit-cancel').onclick = () => quitModal(false)
+$('quit-modal').onclick = (event) => { if (event.target === $('quit-modal')) quitModal(false) }
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape') quitModal(false) })
+$('quit-confirm').onclick = () => {
+  quitModal(false)
+  call('/api/quit', {}).finally(() => { document.body.innerHTML = '<p style="padding:40px;text-align:center">Agent arrêté. Tu peux fermer cette fenêtre.</p>' })
+}
 const sendAllow = () => { dirty.allow = Date.now(); act('/api/allow', { mouse: $('allow-mouse').checked, keyboard: $('allow-keyboard').checked }) }
 $('allow-mouse').onchange = $('allow-keyboard').onchange = sendAllow
 
