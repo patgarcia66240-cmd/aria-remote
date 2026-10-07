@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ARIA Remote</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='b' x1='10' y1='6' x2='55' y2='59' gradientUnits='userSpaceOnUse'%3E%3Cstop stop-color='%233B82F6'/%3E%3Cstop offset='1' stop-color='%2306B6D4'/%3E%3C/linearGradient%3E%3ClinearGradient id='c' x1='25' y1='19' x2='39' y2='45' gradientUnits='userSpaceOnUse'%3E%3Cstop stop-color='%23E0F2FE'/%3E%3Cstop offset='1' stop-color='%2367E8F9'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23b)'/%3E%3Cpath d='M18 32c7-7 21-7 28 0M18 36c7 7 21 7 28 0' fill='none' stroke='%23DFFBFF' stroke-linecap='round' stroke-width='2.5'/%3E%3Ccircle cx='32' cy='34' r='10' fill='url(%23c)'/%3E%3Ccircle cx='32' cy='34' r='5' fill='%230B3A78'/%3E%3Ccircle cx='35' cy='30.5' r='2' fill='white'/%3E%3C/svg%3E">
 <style>
   :root {
     --bg: #14171f; --panel: #1c212c; --panel-2: #232a37; --line: #2f384a; --text: #e8ecf4; --muted: #8d99b0;
@@ -14,6 +15,7 @@
     font: 15px/1.45 "Segoe UI", system-ui, -apple-system, "Inter", sans-serif; -webkit-font-smoothing: antialiased; }
   body { display: flex; flex-direction: column; user-select: none; }
   header { display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: linear-gradient(180deg, #1b2130, var(--bg)); border-bottom: 1px solid var(--line); }
+  .mark { width: 38px; height: 38px; flex: none; border-radius: 11px; box-shadow: 0 6px 18px rgba(18,36,77,.55); }
   .logo { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; font-weight: 700; font-size: 18px; color: #fff;
     background: linear-gradient(135deg, var(--accent), #8b5cf6); box-shadow: 0 6px 18px rgba(59,130,246,.35); }
   header h1 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: .2px; }
@@ -80,7 +82,7 @@
 </head>
 <body>
 <header>
-  <div class="logo">A</div>
+  <svg class="mark" viewBox="0 0 64 64" role="img" aria-label="Logo ARIA"><defs><linearGradient id="mb" x1="10" y1="6" x2="55" y2="59" gradientUnits="userSpaceOnUse"><stop stop-color="#3B82F6"/><stop offset="1" stop-color="#06B6D4"/></linearGradient><linearGradient id="mc" x1="25" y1="19" x2="39" y2="45" gradientUnits="userSpaceOnUse"><stop stop-color="#E0F2FE"/><stop offset="1" stop-color="#67E8F9"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="url(#mb)"/><path d="M15 34c5-13 13-19 17-19s12 6 17 19c-5 13-13 19-17 19S20 47 15 34Z" fill="#0F2B5C" fill-opacity=".45"/><path d="M18 32c7-7 21-7 28 0M18 36c7 7 21 7 28 0" fill="none" stroke="#DFFBFF" stroke-linecap="round" stroke-width="2.5"/><circle cx="32" cy="34" r="10" fill="url(#mc)"/><circle cx="32" cy="34" r="5" fill="#0B3A78"/><circle cx="35" cy="30.5" r="2" fill="white"/><path d="M32 8v5M32 55v-5M8 34h5M51 34h5" stroke="white" stroke-linecap="round" stroke-opacity=".75" stroke-width="2"/></svg>
   <div><h1 id="name">ARIA Remote</h1><small>Contrôle à distance sécurisé</small></div>
   <span class="pill" id="pill"><span class="dot"></span><span id="pill-text">…</span></span>
 </header>
