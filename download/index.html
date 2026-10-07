@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0f1521">
-<title>ARIA Remote — agent Windows</title>
+<title>ARIA Remote</title>
 <meta name="description" content="Agent Remote de PC Assistant pour Windows : permet à ARIA de se connecter à ce PC, uniquement avec ton accord.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='10' y1='6' x2='55' y2='59' gradientUnits='userSpaceOnUse'%3E%3Cstop stop-color='%233B82F6'/%3E%3Cstop offset='1' stop-color='%2306B6D4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ccircle cx='32' cy='34' r='10' fill='%23E0F2FE'/%3E%3Ccircle cx='32' cy='34' r='5' fill='%230B3A78'/%3E%3C/svg%3E">
 <style>
@@ -55,12 +55,13 @@
   .final { text-align:center; margin:clamp(32px,6vh,64px) 0 clamp(40px,7vh,72px); padding:clamp(40px,7vh,72px) 24px; border-radius:28px; border:1px solid var(--g700);
     background:radial-gradient(70% 120% at 50% 0%, rgba(47,111,224,.26), transparent 70%), rgba(23,31,46,.6); }
   .final .meta { margin-top:18px; }
-  @keyframes rise { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
+  @keyframes rise { from { transform:translateY(12px); } to { transform:none; } }
   .hero > div > *, .hero .art { animation:rise .6s cubic-bezier(.2,.7,.2,1) both; }
   .hero > div > :nth-child(2) { animation-delay:.06s; } .hero > div > :nth-child(3) { animation-delay:.12s; } .hero > div > :nth-child(4) { animation-delay:.18s; } .hero > div > :nth-child(5) { animation-delay:.24s; } .hero .art { animation-delay:.12s; }
   html { scroll-padding-top:20px; }
 
   section.block { padding:clamp(40px,7vh,72px) 0; }
+  h1, h2, h3 { text-wrap:balance; }
   h2 { margin:0 0 8px; font-size:clamp(26px,3.4vw,34px); letter-spacing:-.02em; line-height:1.15; }
   .sub { margin:0 0 40px; color:var(--g400); font-size:18px; }
 
@@ -135,7 +136,7 @@
     <section class="hero">
       <div>
         <h1>ARIA <span>Remote</span></h1>
-        <p class="lead">Laisse ARIA se connecter à ce PC pour t'aider à distance — jamais sans ton accord.</p>
+        <p class="lead">Laisse ARIA se connecter à ce PC pour t'aider à distance. Rien ne se passe sans ton accord.</p>
         <a class="cta" href="/remote-agent.exe" download>
           <svg class="i"><use href="#i-download"/></svg>
           Télécharger pour Windows
