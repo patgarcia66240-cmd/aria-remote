@@ -54,6 +54,7 @@ pub struct SessionInfo {
 /// Ce que la fenêtre affiche. `link` : setup | connecting | unpaired | online | error.
 #[derive(Serialize, Clone, Default, Debug)]
 pub struct UiState {
+    pub version: String,
     pub device_name: String,
     pub device_id: String,
     pub fingerprint: String,
@@ -108,7 +109,7 @@ impl UiShared {
     }
 
     pub fn snapshot(&self) -> UiState {
-        self.state.lock().map(|s| s.clone()).unwrap_or_default()
+        self.state.lock().map(|s| UiState { version: env!("CARGO_PKG_VERSION").to_string(), ..s.clone() }).unwrap_or_default()
     }
 
     /// La fenêtre est-elle ouverte ET visible ? Si oui, c'est elle qui demande l'accord ; sinon l'accord passe par une fenêtre système.
