@@ -46,8 +46,8 @@
   a:focus-visible { outline:3px solid var(--b300); outline-offset:3px; }
   .art { margin:44px auto 0; max-width:760px; }
   .art svg { display:block; width:100%; height:auto; overflow:visible; }
-  .art .flow { animation:flow 1.6s linear infinite; }
-  @keyframes flow { to { stroke-dashoffset:-24; } }
+  .art .beam { animation:beam 1.6s linear infinite; }
+  @keyframes beam { to { stroke-dashoffset:-24; } }
   .facts { display:flex; flex-wrap:wrap; justify-content:center; gap:10px; margin-top:20px; }
 
   .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin:8px 0 36px; }
@@ -58,11 +58,17 @@
 
   section.block { margin-bottom:36px; }
   h2 { margin:0 0 16px; font-size:22px; letter-spacing:-.02em; }
-  .steps { list-style:none; margin:0; padding:0; display:grid; gap:12px; counter-reset:step; }
-  .steps li { display:flex; gap:16px; align-items:flex-start; padding:16px 18px; counter-increment:step; }
-  .steps li::before { content:counter(step); flex:none; width:32px; height:32px; border-radius:10px; display:grid; place-items:center; font-weight:700; font-size:15px; color:#fff; background:linear-gradient(180deg,var(--b500),var(--b700)); }
-  .steps b { display:block; margin-bottom:2px; }
-  .steps span { color:var(--g400); font-size:14.5px; }
+  .flow { list-style:none; margin:0; padding:0; display:flex; align-items:flex-start; gap:6px; }
+  .flow .step { flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; text-align:center; gap:4px; padding:4px 6px; }
+  .flow .dot { position:relative; width:68px; height:68px; margin-bottom:10px; border-radius:50%; display:grid; place-items:center; color:var(--b300);
+    background:radial-gradient(circle at 30% 25%, rgba(74,138,240,.34), rgba(23,31,46,.9) 70%); border:1px solid rgba(122,174,255,.4); box-shadow:0 10px 28px rgba(18,36,77,.55), 0 0 0 6px rgba(74,138,240,.07); }
+  .flow .dot svg { width:28px; height:28px; }
+  .flow .dot em { position:absolute; top:-4px; right:-4px; width:24px; height:24px; border-radius:50%; display:grid; place-items:center; font:700 12.5px/1 system-ui,sans-serif; font-style:normal; color:#fff;
+    background:linear-gradient(180deg,var(--b500),var(--b700)); border:2px solid var(--g900); }
+  .flow b { font-size:16px; }
+  .flow .step > span:last-child { color:var(--g400); font-size:14px; line-height:1.5; }
+  .flow .arrow { flex:none; width:28px; height:68px; display:grid; place-items:center; color:var(--b500); opacity:.85; }
+  .flow .arrow svg { width:24px; height:24px; stroke-width:2.2; }
   code { font:13px ui-monospace,SFMono-Regular,Consolas,monospace; background:rgba(125,137,159,.16); padding:2px 7px; border-radius:6px; color:var(--g200); }
 
   .twin { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
@@ -76,8 +82,8 @@
 
   footer { border-top:1px solid var(--g700); padding:22px 0 40px; color:var(--g500); font-size:13.5px; display:flex; flex-wrap:wrap; gap:8px 24px; justify-content:space-between; }
 
-  @media (max-width:720px) { .grid, .twin { grid-template-columns:1fr; } .hero { padding-top:36px; } .brand small { display:none; } }
-  @media (prefers-reduced-motion:reduce) { .art .flow { animation:none; } * { transition:none !important; scroll-behavior:auto !important; } }
+  @media (max-width:720px) { .grid, .twin { grid-template-columns:1fr; } .flow { flex-direction:column; align-items:center; gap:2px; } .flow .step { width:100%; max-width:340px; } .flow .arrow { height:34px; width:auto; transform:rotate(90deg); } .hero { padding-top:36px; } .brand small { display:none; } }
+  @media (prefers-reduced-motion:reduce) { .art .beam { animation:none; } * { transition:none !important; scroll-behavior:auto !important; } }
 </style>
 </head>
 <body>
@@ -87,6 +93,11 @@
   <symbol id="i-mouse" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="6"/><path d="M12 2v7"/></symbol>
   <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.4 8.4 8 9.5 4.6-1.1 8-4.5 8-9.5V6l-8-3Z"/><path d="m9 12 2.2 2.2L15.5 10"/></symbol>
   <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 10v4.5M12 17.5h.01"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5-12-7.5Z"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3M14 9l2 2"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3A4 4 0 0 0 11 18.700l1-1"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12.200 2.700 2.700L16 9.500"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h15m0 0-6-6m6 6-6 6"/></symbol>
   <symbol id="i-hash" viewBox="0 0 24 24"><path d="M5 9h14M5 15h14M10 4 8 20M16 4l-2 16"/></symbol>
 </svg>
 
@@ -126,7 +137,7 @@
           <ellipse cx="400" cy="200" rx="400" ry="190" fill="url(#a-halo)" opacity=".5"/>
 
           <!-- Connexion chiffrée -->
-          <path class="flow" d="M286 170 C 350 100, 450 100, 514 160" fill="none" stroke="url(#a-line)" stroke-width="3" stroke-linecap="round" stroke-dasharray="3 9"/>
+          <path class="beam" d="M286 170 C 350 100, 450 100, 514 160" fill="none" stroke="url(#a-line)" stroke-width="3" stroke-linecap="round" stroke-dasharray="3 9"/>
           <circle cx="400" cy="118" r="38" fill="url(#a-halo)"/>
           <circle cx="400" cy="118" r="23" fill="#0f1521" stroke="#4a8af0" stroke-opacity=".7" stroke-width="1.5"/>
           <path d="M400 104 389 108.5v8.2c0 6.4 4.5 10.7 11 12.3 6.5-1.6 11-5.9 11-12.3v-8.2L400 104Z" fill="none" stroke="#7aaeff" stroke-width="2.2" stroke-linejoin="round"/>
@@ -188,11 +199,14 @@
 
     <section class="block">
       <h2>Pour démarrer</h2>
-      <ol class="steps">
-        <li class="card"><div><b>Lance l'agent</b><span>Double-clique sur <code>remote-agent.exe</code> : sa fenêtre s'ouvre.</span></div></li>
-        <li class="card"><div><b>Renseigne le serveur</b><span>Saisis l'adresse et la clé qui t'ont été fournies. Elles sont retenues pour la prochaine fois.</span></div></li>
-        <li class="card"><div><b>Appaire l'appareil</b><span>Un code à 6 chiffres s'affiche : saisis-le dans ARIA, onglet <b style="display:inline">Ordinateur › Maintenance à distance</b>.</span></div></li>
-        <li class="card"><div><b>Accepte la connexion</b><span>Quand ARIA demande le contrôle, une fenêtre te laisse accepter ou refuser.</span></div></li>
+      <ol class="flow">
+        <li class="step"><span class="dot"><svg class="i"><use href="#i-play"/></svg><em>1</em></span><b>Lance l'agent</b><span>Double-clique sur <code>remote-agent.exe</code> : sa fenêtre s'ouvre.</span></li>
+        <li class="arrow" aria-hidden="true"><svg class="i"><use href="#i-arrow"/></svg></li>
+        <li class="step"><span class="dot"><svg class="i"><use href="#i-key"/></svg><em>2</em></span><b>Renseigne le serveur</b><span>Saisis l'adresse et la clé fournies. Elles sont retenues.</span></li>
+        <li class="arrow" aria-hidden="true"><svg class="i"><use href="#i-arrow"/></svg></li>
+        <li class="step"><span class="dot"><svg class="i"><use href="#i-link"/></svg><em>3</em></span><b>Appaire l'appareil</b><span>Saisis le code à 6 chiffres dans ARIA, onglet Ordinateur › Maintenance à distance.</span></li>
+        <li class="arrow" aria-hidden="true"><svg class="i"><use href="#i-arrow"/></svg></li>
+        <li class="step"><span class="dot"><svg class="i"><use href="#i-check"/></svg><em>4</em></span><b>Accepte la connexion</b><span>Une fenêtre te laisse accepter ou refuser chaque prise de contrôle.</span></li>
       </ol>
     </section>
 
