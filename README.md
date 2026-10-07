@@ -2,6 +2,13 @@
 
 Contrôle d'un PC à distance, sécurisé : un **agent Windows** (fenêtre locale, code d'appairage à 6 chiffres), un **serveur de rendez-vous** (WebRTC, STUN/TURN), un **plugin** et une **interface** pour ARIA (PC Assistant), et la **page de téléchargement** de l'agent.
 
+![Vue d'ensemble d'ARIA Remote](docs/images/aria-remote-overview.svg)
+
+**Comment ça marche :**
+1. Les deux PC se connectent au **serveur de rendez-vous** (le contrôleur en HTTPS, l'agent en WSS). Le code à 6 chiffres affiché par l'agent sert à les appairer.
+2. Une fois appairés, ils échangent **directement** l'écran, la souris et le clavier, chiffrés (WebRTC). Le serveur ne voit pas passer l'écran ; seul le relais TURN sert en dernier recours.
+3. Le propriétaire du PC distant **accepte chaque prise de contrôle** et choisit ce qui est autorisé (souris, clavier).
+
 | Dossier | Contenu |
 |---|---|
 | `agent/` | l'agent Rust (`remote-agent.exe`) : capture, souris, clavier, fenêtre locale |
