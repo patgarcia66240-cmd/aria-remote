@@ -43,6 +43,7 @@ fn is_local_host(host: &str) -> bool {
 }
 
 /// Le code d'appairage : six chiffres, tout le reste (espaces, tirets) est ignoré.
+#[allow(dead_code)] // même règle que la saisie dans la fenêtre (web/app.js) ; gardée ici pour les tests
 pub fn pairing_code(raw: &str) -> Option<String> {
     let digits: String = raw.chars().filter(char::is_ascii_digit).collect();
     (digits.len() == 6).then_some(digits)
@@ -97,13 +98,38 @@ impl Client {
         self.send(self.http.get(format!("{}/api/remote/status", self.base))).await
     }
 
-    pub async fn devices(&self) -> Result<Value, String> {
-        self.send(self.http.get(format!("{}/api/remote/devices", self.base))).await
+    /// Un appel du contrôleur vers `/api/remote<path>`. Seules les routes du contrôleur passent (voir `allowed`) : la fenêtre ne peut jamais agir en agent.
+    pub async fn request(&self, method: &str, path: &str, body: Option<Value>) -> Result<Value, String> {
+        if !allowed(method, path) {
+            return Err("Appel non autorisé.".into());
+        }
+        let url = format!("{}/api/remote{}", self.base, path);
+        let builder = match method {
+            "GET" => self.http.get(url),
+            "POST" => self.http.post(url).json(&body.unwrap_or_else(|| serde_json::json!({}))),
+            _ => self.http.delete(url),
+        };
+        self.send(builder).await
     }
+}
 
-    pub async fn pair(&self, code: &str) -> Result<Value, String> {
-        let code = pairing_code(code).ok_or("Le code d'appairage a 6 chiffres.")?;
-        self.send(self.http.post(format!("{}/api/remote/pair", self.base)).json(&serde_json::json!({ "code": code }))).await
+/// Routes que la fenêtre peut appeler (côté contrôleur) : appareils, appairage, sessions, signaling, serveurs STUN/TURN.
+/// Jamais les routes d'agent (`/devices/register`, `/agent/...`).
+pub fn allowed(method: &str, path: &str) -> bool {
+    let (route, query) = path.split_once('?').unwrap_or((path, ""));
+    let safe = |text: &str| text.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '/' | '=' | '&'));
+    if !route.starts_with('/') || route.contains("..") || route.contains("//") || !safe(route) || !safe(query) {
+        return false;
+    }
+    let parts: Vec<&str> = route.trim_start_matches('/').split('/').collect();
+    match (method, parts.as_slice()) {
+        ("GET", ["status"] | ["devices"] | ["ice-servers"]) => true,
+        ("GET", ["devices", id]) => *id != "register",
+        ("POST", ["pair"] | ["sessions"] | ["signaling", "offer" | "answer" | "ice"]) => true,
+        ("GET" | "DELETE", ["sessions", _]) => true,
+        ("POST", ["sessions", _, "reconnect"]) => true,
+        ("GET", ["sessions", _, "signaling"]) => true,
+        _ => false,
     }
 }
 
@@ -183,7 +209,7 @@ mod tests {
         let reply: &'static str = Box::leak(format!("HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}", body.len(), body).into_boxed_str());
         let (address, server) = serve_once(reply).await;
         let client = Client::new(&address, "une-cle-de-controleur-assez-longue").unwrap();
-        let devices = client.devices().await.unwrap();
+        let devices = client.request("GET", "/devices", None).await.unwrap();
         assert_eq!(devices["devices"][0]["name"], "Bureau");
         let request = server.await.unwrap().to_ascii_lowercase();
         assert!(request.starts_with("get /api/remote/devices "));
@@ -191,16 +217,36 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn pairing_sends_only_the_digits_and_shows_the_server_error() {
+    async fn a_post_sends_its_body_and_shows_the_server_error() {
         let body = r#"{"detail":"Code invalide ou expiré."}"#;
         let reply: &'static str = Box::leak(format!("HTTP/1.1 400 Bad Request\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}", body.len(), body).into_boxed_str());
         let (address, server) = serve_once(reply).await;
         let client = Client::new(&address, "cle").unwrap();
-        let error = client.pair(" 085 201 ").await.unwrap_err();
+        let error = client.request("POST", "/pair", Some(serde_json::json!({ "code": "085201" }))).await.unwrap_err();
         assert_eq!(error, "Code invalide ou expiré.");
         let request = server.await.unwrap();
         assert!(request.starts_with("POST /api/remote/pair "));
         assert!(request.ends_with(r#"{"code":"085201"}"#));
+    }
+
+    #[test]
+    fn only_controller_routes_are_allowed() {
+        for (method, path) in [("GET", "/devices"), ("GET", "/devices/dev_bureau_0001"), ("POST", "/pair"), ("POST", "/sessions"), ("GET", "/sessions/sess_1"),
+                               ("DELETE", "/sessions/sess_1"), ("POST", "/sessions/sess_1/reconnect"), ("GET", "/sessions/sess_1/signaling?after=3"),
+                               ("POST", "/signaling/offer"), ("POST", "/signaling/ice"), ("GET", "/ice-servers?session_id=sess_1"), ("GET", "/status")] {
+            assert!(allowed(method, path), "{method} {path} devrait passer");
+        }
+        for (method, path) in [("POST", "/devices/register"), ("GET", "/devices/register"), ("GET", "/agent/ws"), ("POST", "/agent/ws"), ("DELETE", "/devices"),
+                               ("GET", "/sessions/../agent/ws"), ("GET", "//agent"), ("GET", "devices"), ("PUT", "/sessions"), ("GET", "/sessions/s 1"),
+                               ("GET", "/devices?x=%00"), ("POST", "/signaling/other"), ("GET", "/")] {
+            assert!(!allowed(method, path), "{method} {path} devrait être refusé");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_forbidden_call_never_reaches_the_network() {
+        let client = Client::new("http://127.0.0.1:9", "cle").unwrap();
+        assert_eq!(client.request("POST", "/devices/register", None).await.unwrap_err(), "Appel non autorisé.");
     }
 
     #[tokio::test]

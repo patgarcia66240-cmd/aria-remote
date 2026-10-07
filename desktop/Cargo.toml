@@ -1,6 +1,6 @@
 [package]
 name = "aria-remote-desktop"
-version = "0.1.0"
+version = "0.2.0"
 description = "ARIA Remote : application de bureau pour contrôler un PC à distance"
 edition = "2021"
 

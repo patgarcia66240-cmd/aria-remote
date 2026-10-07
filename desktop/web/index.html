@@ -7,14 +7,24 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- Icônes : un seul jeu, dessiné pour s'aligner sur la ligne de texte (24x24, trait de 1.8) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-mouse" viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="5.5"/><path d="M12 2.5v6.5"/></symbol>
+  <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.5" y="5.5" width="19" height="13" rx="2.5"/><path d="M6.5 9.5h.01M10 9.5h.01M14 9.5h.01M17.5 9.5h.01M7 14.5h10"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="13" rx="2.5"/><path d="M8.5 21h7M12 17v4"/><path d="m10.5 8.5 4 2.5-4 2.5z" fill="currentColor"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M17.7 6.3a8 8 0 1 1-11.4 0"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3A4 4 0 0 0 11 18.7l1-1"/></symbol>
+  <symbol id="i-spin" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.2-8.55"/></symbol>
+</svg>
+
 <header>
   <svg class="mark" viewBox="0 0 64 64" role="img" aria-label="Logo ARIA"><defs><linearGradient id="mb" x1="10" y1="6" x2="55" y2="59" gradientUnits="userSpaceOnUse"><stop stop-color="#3B82F6"/><stop offset="1" stop-color="#06B6D4"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="url(#mb)"/><path d="M15 34c5-13 13-19 17-19s12 6 17 19c-5 13-13 19-17 19S20 47 15 34Z" fill="#0F2B5C" fill-opacity=".45"/><circle cx="32" cy="34" r="8" fill="#E0F2FE"/><circle cx="32" cy="34" r="3.5" fill="#0F2B5C"/></svg>
   <div class="id"><h1>ARIA Remote <span class="ver" id="ver" hidden></span></h1><small>Contrôler un PC à distance</small></div>
   <span class="spacer"></span>
   <span class="pill" id="pill" hidden><span class="dot"></span><span id="pill-text"></span></span>
-  <button class="icon" id="open-settings" title="Réglages" aria-label="Réglages" hidden>
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
-  </button>
+  <button class="icon" id="open-settings" title="Réglages" aria-label="Réglages" hidden><svg class="i"><use href="#i-gear"/></svg></button>
 </header>
 
 <main>
@@ -41,7 +51,7 @@
       <h2 id="dev-title">Appareils</h2>
       <div class="err" id="list-err" role="alert" hidden></div>
       <ul class="devices" id="devices"></ul>
-      <p class="empty" id="empty" hidden>Aucun appareil pour l'instant. Lance l'agent sur le PC à contrôler (télécharge-le sur processxen.com), puis saisis ici le code à 6 chiffres qu'il affiche. Si l'agent indique « Prêt à être contrôlé », l'appareil est déjà appairé : il apparaît ici dès que cette application utilise le même serveur et la même clé.</p>
+      <p class="empty" id="empty" hidden>Aucun appareil pour l'instant. Lance l'agent sur le PC à contrôler (télécharge-le sur processxen.com), puis saisis à droite le code à 6 chiffres qu'il affiche.</p>
     </section>
 
     <section class="card" aria-labelledby="pair-title">
@@ -49,13 +59,31 @@
       <p class="hint">Saisis le code d'appairage affiché par l'agent sur l'autre PC.</p>
       <form id="pair-form" autocomplete="off">
         <input type="text" id="code" inputmode="numeric" maxlength="12" placeholder="000 000" aria-label="Code d'appairage à 6 chiffres" spellcheck="false">
-        <button id="pair-btn" disabled>Appairer</button>
+        <button id="pair-btn" disabled><svg class="i"><use href="#i-link"/></svg>Appairer</button>
       </form>
       <div class="err" id="pair-err" role="alert" hidden></div>
       <div class="ok" id="pair-ok" role="status" hidden></div>
+      <p class="tip">Pas de code ? Si l'agent indique « Prêt à être contrôlé », l'appareil est déjà appairé : il est dans la liste. Sinon, utilise le bouton « Afficher un code d'appairage » de l'agent.</p>
     </section>
   </div>
+
+  <!-- Écran distant -->
+  <section class="viewer" id="viewer" hidden>
+    <div class="bar">
+      <div class="who">
+        <b id="v-name"></b>
+        <span class="status" id="v-state" role="status"></span>
+      </div>
+      <div class="caps" id="v-caps"></div>
+      <button class="ghost danger-text" id="disconnect"><svg class="i"><use href="#i-power"/></svg>Déconnecter</button>
+    </div>
+    <div class="stage" id="stage" style="--ratio: 1.7778">
+      <canvas id="screen" tabindex="0" width="16" height="9" aria-label="Écran distant"></canvas>
+      <svg id="cursor" class="cursor" aria-hidden="true" width="18" height="26" viewBox="0 0 18 26"><path d="M1 1 L1 20 L6 15.5 L9.5 24 L13 22.5 L9.5 14.5 L16.5 14.5 Z" fill="#fff" stroke="#111" stroke-width="1.5" stroke-linejoin="round"/></svg>
+    </div>
+    <p class="hint" id="v-hint"></p>
+  </section>
 </main>
-<script src="app.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>

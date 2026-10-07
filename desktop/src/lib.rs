@@ -1,7 +1,7 @@
 //! ARIA Remote Desktop : le contrôleur autonome.
 //!
-//! Étapes faites : réglages (serveur + clé), liste des appareils, appairage par code. À venir : la session (écran distant, souris, clavier ;
-//! voir README.md, « Feuille de route »).
+//! Réglages (serveur + clé) et relais des appels vers le serveur de rendez-vous. La liste des appareils, l'appairage et la session
+//! (écran distant, souris, clavier, WebRTC) tournent dans la fenêtre (web/), qui passe par `api_request`.
 mod client;
 mod config;
 
@@ -48,19 +48,15 @@ fn saved_client() -> Result<Client, String> {
     Client::new(&config.server, &config.key)
 }
 
+/// Relais des appels du contrôleur vers le serveur de rendez-vous : la clé reste ici, la fenêtre ne la voit jamais.
 #[tauri::command]
-async fn list_devices() -> Result<Value, String> {
-    saved_client()?.devices().await
-}
-
-#[tauri::command]
-async fn pair_device(code: String) -> Result<Value, String> {
-    saved_client()?.pair(&code).await
+async fn api_request(method: String, path: String, body: Option<Value>) -> Result<Value, String> {
+    saved_client()?.request(&method, &path, body).await
 }
 
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![app_version, load_settings, save_settings, list_devices, pair_device])
+        .invoke_handler(tauri::generate_handler![app_version, load_settings, save_settings, api_request])
         .run(tauri::generate_context!())
         .expect("échec du démarrage d'ARIA Remote Desktop");
 }
