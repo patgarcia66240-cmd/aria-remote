@@ -46,9 +46,10 @@ label.field { display: block; margin: 14px 0 0; font-size: 13px; color: var(--mu
 input[type=text], input[type=password] { width: 100%; height: var(--h); margin-top: 6px; padding: 0 12px; border-radius: 10px; font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); outline: none; }
 input:focus { border-color: var(--accent); }
 .actions { display: flex; gap: 10px; margin-top: 18px; } .grow { flex: 1; }
-.err, .ok { margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; font-size: 13.5px; }
-.err { background: rgba(248,113,113,.12); border: 1px solid rgba(248,113,113,.4); color: #fecaca; }
-.ok { background: rgba(52,211,153,.12); border: 1px solid rgba(52,211,153,.4); color: #a7f3d0; }
+/* Messages : classe « msg » obligatoire, pour ne jamais se mélanger avec les états « ok / warn / bad » de la pastille. */
+.msg { margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; font-size: 13.5px; }
+.msg.err { background: rgba(248,113,113,.12); border: 1px solid rgba(248,113,113,.4); color: #fecaca; }
+.msg.ok { background: rgba(52,211,153,.12); border: 1px solid rgba(52,211,153,.4); color: #a7f3d0; }
 
 /* Appairage : champ et bouton de même hauteur */
 #pair-form { display: flex; gap: 10px; margin-bottom: 12px; }

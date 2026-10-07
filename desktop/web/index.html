@@ -44,7 +44,7 @@
     <label class="field">Clé du contrôleur <span class="opt" id="key-opt"></span>
       <input type="password" id="key" placeholder="RENDEZVOUS_CONTROLLER_KEY" autocomplete="off">
     </label>
-    <div class="err" id="setup-err" role="alert" hidden></div>
+    <div class="msg err" id="setup-err" role="alert" hidden></div>
     <div class="actions">
       <button class="ghost" id="cancel-settings" hidden>Annuler</button>
       <button id="save" class="grow">Se connecter</button>
@@ -55,7 +55,7 @@
   <div class="grid" id="home" hidden>
     <section class="card" aria-labelledby="dev-title">
       <h2 id="dev-title">Appareils</h2>
-      <div class="err" id="list-err" role="alert" hidden></div>
+      <div class="msg err" id="list-err" role="alert" hidden></div>
       <ul class="devices" id="devices"></ul>
       <p class="empty" id="empty" hidden>Aucun appareil pour l'instant. Lance l'agent sur le PC à contrôler (télécharge-le sur processxen.com), puis saisis à droite le code à 6 chiffres qu'il affiche.</p>
     </section>
@@ -67,8 +67,8 @@
         <input type="text" id="code" inputmode="numeric" maxlength="12" placeholder="000 000" aria-label="Code d'appairage à 6 chiffres" spellcheck="false">
         <button id="pair-btn" disabled><svg class="i"><use href="#i-link"/></svg>Appairer</button>
       </form>
-      <div class="err" id="pair-err" role="alert" hidden></div>
-      <div class="ok" id="pair-ok" role="status" hidden></div>
+      <div class="msg err" id="pair-err" role="alert" hidden></div>
+      <div class="msg ok" id="pair-ok" role="status" hidden></div>
       <p class="tip">Pas de code ? Si l'agent indique « Prêt à être contrôlé », l'appareil est déjà appairé : il est dans la liste. Sinon, utilise le bouton « Afficher un code d'appairage » de l'agent.</p>
     </section>
   </div>
