@@ -197,3 +197,28 @@ def test_chat_works_through_the_rendezvous_server(relay):
     assert "Je ne connais pas d'appareil nommé « salon »" in ask("connecte-moi au PC du salon")
     assert "hors ligne" in ask("connecte-moi au PC du bureau")                      # appareil connu mais son agent n'est pas connecté
     assert "Aucune session" in ask("déconnecte la session remote")
+
+
+# -- image du serveur : dépendances ---------------------------------------------------------------------------------------------
+def test_every_third_party_import_of_the_image_is_in_the_rendezvous_requirements():
+    """Le Dockerfile n'embarque qu'une partie du backend avec une liste de dépendances réduite : un import oublié ne se voit qu'au déploiement
+    (c'est arrivé : « No module named 'httpx' » sur Render). Le routeur et ses modules importent ce qui est listé ici."""
+    import ast
+    import sys
+
+    root = Path(__file__).resolve().parent.parent
+    files = [*(root / "plugins" / "remote").glob("*.py"), *(root / "plugin_sdk").glob("*.py"), root / "config.py", root / "security.py",
+             root / "services" / "audit_log.py", root / "services" / "intents.py", APP_PATH]
+    local = {"plugins", "plugin_sdk", "services", "config", "security", "app"}
+    package_of = {"dotenv": "python-dotenv", "pydantic_settings": "pydantic-settings", "starlette": "fastapi"}      # starlette arrive avec fastapi
+    imported: set[str] = set()
+    for file in files:
+        for node in ast.walk(ast.parse(file.read_text(encoding="utf-8"))):
+            names = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or ""] if isinstance(node, ast.ImportFrom) and not node.level else []
+            imported |= {name.split(".")[0] for name in names if name}
+    third_party = {name for name in imported if name not in sys.stdlib_module_names and name not in local and name != "__future__"}
+    requirements = (root.parent / "remote-rendezvous" / "requirements.txt").read_text(encoding="utf-8")
+    listed = {line.split("#")[0].strip().split("[")[0].split(">")[0].split("<")[0].split("=")[0].strip().lower().replace("_", "-")
+              for line in requirements.splitlines() if line.split("#")[0].strip()}
+    missing = sorted(package_of.get(name, name).lower().replace("_", "-") for name in third_party) 
+    assert [m for m in missing if m not in listed] == [], f"à ajouter à remote-rendezvous/requirements.txt : {[m for m in missing if m not in listed]}"

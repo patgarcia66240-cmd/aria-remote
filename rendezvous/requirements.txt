@@ -5,3 +5,4 @@ pydantic>=2.10,<3
 pydantic-settings>=2.6,<3
 python-dotenv>=1.0,<2
 cryptography>=43,<47
+httpx>=0.27,<1            # mode relais du plugin Remote (importé par le routeur, même quand il n'est pas utilisé)
