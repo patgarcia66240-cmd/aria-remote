@@ -16,73 +16,71 @@
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
-  body { margin:0; min-height:100vh; background:var(--g900); color:var(--g100); font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; -webkit-font-smoothing:antialiased; }
-  body::before { /* halo discret derrière l'en-tête */
-    content:""; position:fixed; inset:0 0 auto 0; height:520px; pointer-events:none; z-index:-1;
-    background: radial-gradient(60% 100% at 50% 0%, rgba(47,111,224,.28), transparent 70%), radial-gradient(35% 70% at 85% 10%, rgba(6,182,212,.14), transparent 70%);
-  }
-  .wrap { max-width:880px; margin:0 auto; padding:0 20px; }
+  body { margin:0; min-height:100vh; min-height:100dvh; background:var(--g900); color:var(--g100); font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; -webkit-font-smoothing:antialiased; }
+  body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:-1;
+    background: radial-gradient(55% 60% at 30% 0%, rgba(47,111,224,.28), transparent 70%), radial-gradient(40% 50% at 90% 15%, rgba(6,182,212,.14), transparent 70%); }
+  .wrap { max-width:1120px; min-height:100vh; min-height:100dvh; margin:0 auto; padding:0 24px; display:flex; flex-direction:column; }
   svg.i { width:20px; height:20px; flex:none; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
 
-  header { display:flex; align-items:center; justify-content:space-between; padding:22px 0; }
+  header { display:flex; align-items:center; justify-content:space-between; padding:clamp(10px,2.2vh,20px) 0; }
   .brand { display:flex; align-items:center; gap:12px; font-weight:600; font-size:18px; letter-spacing:-.01em; }
   .brand small { font-weight:400; color:var(--g400); font-size:18px; }
-  .brand svg { width:36px; height:36px; border-radius:10px; box-shadow:0 6px 18px rgba(18,36,77,.55); }
-  .chip { display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border:1px solid var(--g700); border-radius:999px; background:rgba(23,31,46,.7); color:var(--g300); font-size:13px; }
+  .brand svg { width:34px; height:34px; border-radius:10px; box-shadow:0 6px 18px rgba(18,36,77,.55); }
+  .chip { display:inline-flex; align-items:center; gap:8px; padding:5px 12px; border:1px solid var(--g700); border-radius:999px; background:rgba(23,31,46,.7); color:var(--g300); font-size:13px; white-space:nowrap; }
   .chip .dot { width:8px; height:8px; border-radius:50%; background:var(--ok); box-shadow:0 0 0 4px rgba(52,211,153,.16); }
+  .chip svg.i { width:15px; height:15px; color:var(--b300); }
 
-  .hero { text-align:center; padding:56px 0 40px; }
-  .hero .icon { width:76px; height:76px; margin:0 auto 22px; border-radius:22px; display:grid; place-items:center; color:var(--b300);
-    background:linear-gradient(145deg, rgba(74,138,240,.22), rgba(6,182,212,.12)); border:1px solid rgba(122,174,255,.28); box-shadow:0 18px 50px rgba(18,36,77,.55); }
-  .hero .icon svg { width:36px; height:36px; }
-  h1 { margin:0 0 12px; font-size:clamp(32px,6vw,48px); line-height:1.08; letter-spacing:-.03em; font-weight:700; }
+  main { flex:1; display:flex; flex-direction:column; justify-content:center; gap:clamp(14px,3.2vh,30px); padding-bottom:clamp(8px,2vh,20px); }
+
+  .hero { display:grid; grid-template-columns:1.05fr 1fr; align-items:center; gap:clamp(12px,3vw,40px); }
+  h1 { margin:0 0 10px; font-size:clamp(32px,min(5.4vw,8vh),56px); line-height:1.05; letter-spacing:-.03em; font-weight:700; }
   h1 span { background:linear-gradient(90deg,var(--b400),var(--cyan)); -webkit-background-clip:text; background-clip:text; color:transparent; }
-  .lead { max-width:560px; margin:0 auto 30px; color:var(--g300); font-size:18px; }
-  .cta { display:inline-flex; align-items:center; gap:12px; padding:15px 28px; border-radius:14px; text-decoration:none; font-weight:600; font-size:17px; color:#fff; min-height:52px;
+  .lead { margin:0 0 clamp(14px,2.6vh,24px); max-width:470px; color:var(--g300); font-size:clamp(15px,2.2vh,18px); }
+  .cta { display:inline-flex; align-items:center; gap:12px; padding:14px 26px; border-radius:14px; text-decoration:none; font-weight:600; font-size:17px; color:#fff; min-height:52px;
     background:linear-gradient(180deg,var(--b500),var(--b600)); box-shadow:0 10px 30px rgba(47,111,224,.4), inset 0 1px 0 rgba(255,255,255,.22); transition:transform .15s, box-shadow .15s, filter .15s; }
   .cta:hover { transform:translateY(-1px); filter:brightness(1.07); box-shadow:0 14px 36px rgba(47,111,224,.5), inset 0 1px 0 rgba(255,255,255,.22); }
   .cta:active { transform:none; }
   .cta svg { width:22px; height:22px; }
   a:focus-visible { outline:3px solid var(--b300); outline-offset:3px; }
-  .art { margin:44px auto 0; max-width:760px; }
-  .art svg { display:block; width:100%; height:auto; overflow:visible; }
+  .facts { display:flex; flex-wrap:wrap; gap:8px; margin-top:clamp(12px,2.2vh,20px); }
+  .art { margin:0; }
+  .art svg { display:block; width:100%; height:auto; max-height:clamp(170px,38vh,360px); overflow:visible; }
   .art .beam { animation:beam 1.6s linear infinite; }
   @keyframes beam { to { stroke-dashoffset:-24; } }
-  .facts { display:flex; flex-wrap:wrap; justify-content:center; gap:10px; margin-top:20px; }
 
-  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin:8px 0 36px; }
-  .card { background:rgba(23,31,46,.72); border:1px solid var(--g700); border-radius:18px; padding:20px; }
-  .feature .ico { width:42px; height:42px; border-radius:12px; display:grid; place-items:center; margin-bottom:14px; color:var(--b300); background:rgba(74,138,240,.14); border:1px solid rgba(122,174,255,.2); }
-  .feature h3 { margin:0 0 4px; font-size:16px; }
-  .feature p { margin:0; color:var(--g400); font-size:14px; line-height:1.5; }
-
-  section.block { margin-bottom:36px; }
-  h2 { margin:0 0 16px; font-size:22px; letter-spacing:-.02em; }
+  .card { background:rgba(23,31,46,.72); border:1px solid var(--g700); border-radius:16px; }
+  h2 { margin:0 0 clamp(8px,1.6vh,14px); font-size:18px; letter-spacing:-.01em; }
   .flow { list-style:none; margin:0; padding:0; display:flex; align-items:flex-start; gap:6px; }
-  .flow .step { flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; text-align:center; gap:4px; padding:4px 6px; }
-  .flow .dot { position:relative; width:68px; height:68px; margin-bottom:10px; border-radius:50%; display:grid; place-items:center; color:var(--b300);
-    background:radial-gradient(circle at 30% 25%, rgba(74,138,240,.34), rgba(23,31,46,.9) 70%); border:1px solid rgba(122,174,255,.4); box-shadow:0 10px 28px rgba(18,36,77,.55), 0 0 0 6px rgba(74,138,240,.07); }
-  .flow .dot svg { width:28px; height:28px; }
-  .flow .dot em { position:absolute; top:-4px; right:-4px; width:24px; height:24px; border-radius:50%; display:grid; place-items:center; font:700 12.5px/1 system-ui,sans-serif; font-style:normal; color:#fff;
+  .flow .step { flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; text-align:center; gap:2px; padding:0 4px; }
+  .flow .dot { position:relative; width:clamp(46px,8vh,60px); height:clamp(46px,8vh,60px); margin-bottom:8px; border-radius:50%; display:grid; place-items:center; color:var(--b300);
+    background:radial-gradient(circle at 30% 25%, rgba(74,138,240,.34), rgba(23,31,46,.9) 70%); border:1px solid rgba(122,174,255,.4); box-shadow:0 8px 22px rgba(18,36,77,.55), 0 0 0 5px rgba(74,138,240,.07); }
+  .flow .dot svg { width:24px; height:24px; }
+  .flow .dot em { position:absolute; top:-4px; right:-4px; width:22px; height:22px; border-radius:50%; display:grid; place-items:center; font:700 12px/1 system-ui,sans-serif; font-style:normal; color:#fff;
     background:linear-gradient(180deg,var(--b500),var(--b700)); border:2px solid var(--g900); }
-  .flow b { font-size:16px; }
-  .flow .step > span:last-child { color:var(--g400); font-size:14px; line-height:1.5; }
-  .flow .arrow { flex:none; width:28px; height:68px; display:grid; place-items:center; color:var(--b500); opacity:.85; }
-  .flow .arrow svg { width:24px; height:24px; stroke-width:2.2; }
-  code { font:13px ui-monospace,SFMono-Regular,Consolas,monospace; background:rgba(125,137,159,.16); padding:2px 7px; border-radius:6px; color:var(--g200); }
+  .flow b { font-size:15.5px; }
+  .flow .step > span:last-child { color:var(--g400); font-size:13.5px; line-height:1.45; }
+  .flow .arrow { flex:none; width:26px; height:clamp(46px,8vh,60px); display:grid; place-items:center; color:var(--b500); opacity:.85; }
+  .flow .arrow svg { width:22px; height:22px; stroke-width:2.2; }
+  .flow code { white-space:nowrap; }
+  code { font:12.5px ui-monospace,SFMono-Regular,Consolas,monospace; background:rgba(125,137,159,.16); padding:1px 6px; border-radius:6px; color:var(--g200); }
 
-  .twin { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-  .note { display:flex; gap:14px; }
-  .note .ico { flex:none; width:40px; height:40px; border-radius:12px; display:grid; place-items:center; }
+  .twin { display:grid; grid-template-columns:1fr 1.25fr; gap:12px; }
+  .note { display:flex; gap:12px; align-items:flex-start; padding:clamp(10px,1.8vh,16px) 16px; }
+  .note .ico { flex:none; width:34px; height:34px; border-radius:10px; display:grid; place-items:center; }
   .note.warn .ico { color:var(--warn); background:rgba(251,191,36,.12); border:1px solid rgba(251,191,36,.28); }
   .note.ok .ico { color:var(--ok); background:rgba(52,211,153,.12); border:1px solid rgba(52,211,153,.28); }
-  .note h3 { margin:0 0 4px; font-size:16px; }
-  .note p { margin:0; color:var(--g400); font-size:14.5px; }
-  .hash { display:block; margin-top:12px; padding:10px 12px; border-radius:10px; background:var(--g950); border:1px solid var(--g700); font:12.5px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace; color:var(--g200); word-break:break-all; user-select:all; cursor:text; }
+  .note h3 { margin:0 0 2px; font-size:14.5px; }
+  .note p { margin:0; color:var(--g400); font-size:13px; line-height:1.45; }
+  .hash { display:block; margin-top:6px; padding:6px 10px; border-radius:8px; background:var(--g950); border:1px solid var(--g700); font:11.5px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace; color:var(--g200); word-break:break-all; user-select:all; cursor:text; }
 
-  footer { border-top:1px solid var(--g700); padding:22px 0 40px; color:var(--g500); font-size:13.5px; display:flex; flex-wrap:wrap; gap:8px 24px; justify-content:space-between; }
+  footer { padding:10px 0 clamp(10px,2vh,18px); color:var(--g500); font-size:12.5px; display:flex; flex-wrap:wrap; gap:4px 24px; justify-content:space-between; border-top:1px solid var(--g700); }
 
-  @media (max-width:720px) { .grid, .twin { grid-template-columns:1fr; } .flow { flex-direction:column; align-items:center; gap:2px; } .flow .step { width:100%; max-width:340px; } .flow .arrow { height:34px; width:auto; transform:rotate(90deg); } .hero { padding-top:36px; } .brand small { display:none; } }
+  @media (max-width:860px) {
+    .hero { grid-template-columns:1fr; text-align:center; } .lead { margin-left:auto; margin-right:auto; } .facts { justify-content:center; }
+    .art { order:-1; max-width:520px; margin:0 auto; } .brand small { display:none; }
+    .flow { flex-direction:column; align-items:center; gap:2px; } .flow .step { width:100%; max-width:340px; } .flow .arrow { height:30px; width:auto; transform:rotate(90deg); }
+    .twin { grid-template-columns:1fr; }
+  }
   @media (prefers-reduced-motion:reduce) { .art .beam { animation:none; } * { transition:none !important; scroll-behavior:auto !important; } }
 </style>
 </head>
@@ -112,18 +110,20 @@
 
   <main>
     <section class="hero">
-      <h1>ARIA <span>Remote</span></h1>
-      <p class="lead">L'agent Windows qui permet à ARIA de se connecter à ce PC pour t'aider à distance — jamais sans ton accord.</p>
-      <a class="cta" href="/remote-agent.exe" download>
-        <svg class="i"><use href="#i-download"/></svg>
-        Télécharger pour Windows
-      </a>
-      <div class="facts">
-        <span class="chip">Windows 10 / 11 · 64 bits</span>
-        <span class="chip">remote-agent.exe · __SIZE__</span>
-        <span class="chip">Aucune installation</span>
+      <div>
+        <h1>ARIA <span>Remote</span></h1>
+        <p class="lead">L'agent Windows qui permet à ARIA de se connecter à ce PC pour t'aider à distance — jamais sans ton accord.</p>
+        <a class="cta" href="/remote-agent.exe" download>
+          <svg class="i"><use href="#i-download"/></svg>
+          Télécharger pour Windows
+        </a>
+        <div class="facts">
+          <span class="chip">Windows 10 / 11 · 64 bits · __SIZE__</span>
+          <span class="chip"><svg class="i"><use href="#i-monitor"/></svg>Voir l'écran</span>
+          <span class="chip"><svg class="i"><use href="#i-mouse"/></svg>Souris et clavier</span>
+          <span class="chip"><svg class="i"><use href="#i-shield"/></svg>Toujours ton accord</span>
+        </div>
       </div>
-
       <figure class="art">
         <svg viewBox="0 0 800 380" role="img" aria-label="Un ordinateur portable ARIA contrôle à distance l'écran d'un PC Windows, via une connexion chiffrée">
           <defs>
@@ -191,33 +191,27 @@
       </figure>
     </section>
 
-    <div class="grid">
-      <div class="card feature"><div class="ico"><svg class="i"><use href="#i-monitor"/></svg></div><h3>Voir l'écran</h3><p>ARIA affiche l'écran de ce PC en direct pour comprendre et dépanner.</p></div>
-      <div class="card feature"><div class="ico"><svg class="i"><use href="#i-mouse"/></svg></div><h3>Souris et clavier</h3><p>Tu choisis si elles sont autorisées ; sans ton feu vert, elles restent bloquées.</p></div>
-      <div class="card feature"><div class="ico"><svg class="i"><use href="#i-shield"/></svg></div><h3>Toujours ton accord</h3><p>Chaque prise de contrôle demande ta confirmation et se coupe en un clic.</p></div>
-    </div>
-
-    <section class="block">
-      <h2>Pour démarrer</h2>
+    <section aria-labelledby="start">
+      <h2 id="start">Pour démarrer</h2>
       <ol class="flow">
-        <li class="step"><span class="dot"><svg class="i"><use href="#i-play"/></svg><em>1</em></span><b>Lance l'agent</b><span>Double-clique sur <code>remote-agent.exe</code> : sa fenêtre s'ouvre.</span></li>
+        <li class="step"><span class="dot"><svg class="i"><use href="#i-play"/></svg><em>1</em></span><b>Lance l'agent</b><span>Double-clique sur <code>remote-agent.exe</code>.</span></li>
         <li class="arrow" aria-hidden="true"><svg class="i"><use href="#i-arrow"/></svg></li>
-        <li class="step"><span class="dot"><svg class="i"><use href="#i-key"/></svg><em>2</em></span><b>Renseigne le serveur</b><span>Saisis l'adresse et la clé fournies. Elles sont retenues.</span></li>
+        <li class="step"><span class="dot"><svg class="i"><use href="#i-key"/></svg><em>2</em></span><b>Renseigne le serveur</b><span>Adresse et clé fournies, retenues ensuite.</span></li>
         <li class="arrow" aria-hidden="true"><svg class="i"><use href="#i-arrow"/></svg></li>
-        <li class="step"><span class="dot"><svg class="i"><use href="#i-link"/></svg><em>3</em></span><b>Appaire l'appareil</b><span>Saisis le code à 6 chiffres dans ARIA, onglet Ordinateur › Maintenance à distance.</span></li>
+        <li class="step"><span class="dot"><svg class="i"><use href="#i-link"/></svg><em>3</em></span><b>Appaire l'appareil</b><span>Saisis le code à 6 chiffres dans ARIA.</span></li>
         <li class="arrow" aria-hidden="true"><svg class="i"><use href="#i-arrow"/></svg></li>
-        <li class="step"><span class="dot"><svg class="i"><use href="#i-check"/></svg><em>4</em></span><b>Accepte la connexion</b><span>Une fenêtre te laisse accepter ou refuser chaque prise de contrôle.</span></li>
+        <li class="step"><span class="dot"><svg class="i"><use href="#i-check"/></svg><em>4</em></span><b>Accepte la connexion</b><span>Tu autorises ou refuses chaque prise de contrôle.</span></li>
       </ol>
     </section>
 
-    <section class="block twin">
+    <section class="twin">
       <div class="card note warn">
         <div class="ico"><svg class="i"><use href="#i-alert"/></svg></div>
-        <div><h3>Windows affiche un avertissement ?</h3><p>Le fichier n'est pas encore signé par un éditeur reconnu, donc SmartScreen peut le signaler. Compare d'abord l'empreinte du fichier (carte « Vérifie ton téléchargement »), puis choisis <b>Informations complémentaires</b> › <b>Exécuter quand même</b>.</p></div>
+        <div><h3>Avertissement Windows ?</h3><p>Fichier pas encore signé : SmartScreen peut le signaler. Choisis <b>Informations complémentaires</b> › <b>Exécuter quand même</b> après avoir comparé l'empreinte.</p></div>
       </div>
       <div class="card note ok">
         <div class="ico"><svg class="i"><use href="#i-hash"/></svg></div>
-        <div><h3>Vérifie ton téléchargement</h3><p>Empreinte SHA-256 — compare-la avec <code>Get-FileHash remote-agent.exe</code> dans PowerShell.</p><code class="hash">__SHA256__</code></div>
+        <div><h3>Vérifie ton téléchargement</h3><p>Empreinte SHA-256, à comparer avec <code>Get-FileHash remote-agent.exe</code> :</p><code class="hash">__SHA256__</code></div>
       </div>
     </section>
   </main>
