@@ -1,11 +1,15 @@
 # Page de téléchargement de l'agent sur un serveur qui a DÉJÀ un Traefik (modèle « Ubuntu avec n8n » de Hostinger).
-# Variables (fichier .env ou « Environment » du projet dans hPanel) : GIT_TOKEN (jeton GitHub en lecture seule), SITE_HOSTS (par défaut processxen.com).
+# La page se met à jour toute seule (toutes les REFRESH_SECONDS) : il suffit de publier une version sur GitHub. Dépôt public : aucun jeton.
+# Variables facultatives (fichier .env ou « Environment » du projet) : SITE_HOST (par défaut processxen.com), REFRESH_SECONDS (par défaut 600).
 services:
   download:
     build:
-      context: https://x-access-token:${GIT_TOKEN:?GIT_TOKEN manquant}@github.com/patgarcia66240-cmd/aria-remote.git#main:download
-      args:
-        GIT_TOKEN: ${GIT_TOKEN}
+      context: https://github.com/patgarcia66240-cmd/aria-remote.git#main:download
+    image: pc-download:auto
+    environment:
+      REFRESH_SECONDS: ${REFRESH_SECONDS:-600}
+    volumes:
+      - download-cache:/srv/cache
     restart: unless-stopped
     networks:
       - traefik
@@ -17,6 +21,9 @@ services:
       - traefik.http.routers.pc-download.tls=true
       - traefik.http.routers.pc-download.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-mytlschallenge}
       - traefik.http.services.pc-download.loadbalancer.server.port=80
+
+volumes:
+  download-cache:
 
 networks:
   traefik:

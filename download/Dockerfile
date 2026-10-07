@@ -1,22 +1,14 @@
-# Petite page de téléchargement de l'agent Remote (remote-agent.exe), servie par nginx.
-# L'exe n'est PAS dans le dépôt : il est compilé par GitHub Actions (.github/workflows/build-agent.yml) et attaché à une version « agent-vX.Y.Z ».
-# À la construction de l'image, on télécharge TOUTES les versions (la plus récente en bouton principal, les autres listées en bas de page) avec un jeton GitHub en LECTURE SEULE ; ce jeton reste dans l'étape intermédiaire
-# et n'est jamais dans l'image finale.
-FROM alpine:3.20 AS fetch
-ARG GIT_TOKEN
-ARG REPO=patgarcia66240-cmd/aria-remote
-RUN apk add --no-cache curl jq
-WORKDIR /dl
-COPY fetch.sh /dl/fetch.sh
-RUN sh /dl/fetch.sh
-COPY index.html /dl/index.html
-RUN sed -i "s/__VERSION__/$(cat version.txt)/g; s/__SHA256__/$(cat sha256.txt)/g; s/__SIZE__/$(cat size.txt)/g" index.html \
- && sed -i -e "/__VERSIONS__/{r rows.html" -e "d}" index.html \
- && sed -i -e "/__DESKTOP__/{r desktop.html" -e "d}" index.html
-
+# Page de téléchargement d'ARIA Remote : nginx + un petit script qui la tient à jour tout seul.
+# Rien n'est compilé ici : les exe viennent des Releases GitHub (étiquettes agent-vX.Y.Z et desktop-vX.Y.Z), publiées par .github/workflows/.
+# Le conteneur regarde GitHub toutes les REFRESH_SECONDS (600 par défaut) et met la page à jour dès qu'une version sort : plus de reconstruction à la main.
+# Dépôt public : aucun jeton n'est nécessaire.
 FROM nginx:1.27-alpine
+RUN apk add --no-cache curl jq
+ENV REPO=patgarcia66240-cmd/aria-remote REFRESH_SECONDS=600
+WORKDIR /app
+COPY fetch.sh assemble.sh entrypoint.sh index.html /app/
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=fetch /dl/index.html /dl/remote-agent.exe /dl/remote-agent.exe.sha256 /usr/share/nginx/html/
-COPY --from=fetch /dl/versions /usr/share/nginx/html/versions
-COPY --from=fetch /dl/desktop /usr/share/nginx/html/desktop
+VOLUME ["/srv/cache"]
 EXPOSE 80
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s CMD wget -qO- http://127.0.0.1/health >/dev/null || exit 1
+ENTRYPOINT ["sh", "/app/entrypoint.sh"]

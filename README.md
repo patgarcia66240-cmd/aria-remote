@@ -21,6 +21,6 @@ Contrôle d'un PC à distance, sécurisé : un **agent Windows** (fenêtre local
 
 ## Versions
 L'agent suit son propre numéro (`agent/Cargo.toml`). Une release se publie avec une étiquette identique : `git tag agent-v1.5.0 && git push origin agent-v1.5.0`. L'application de bureau a sa propre version et ses propres étiquettes : `desktop-vX.Y.Z`.
-La compilation refuse une étiquette qui ne correspond pas au `Cargo.toml`. La page de téléchargement affiche la dernière version et garde les anciennes.
+La compilation refuse une étiquette qui ne correspond pas au `Cargo.toml`. La page de téléchargement se met à jour **toute seule** quand une version est publiée (voir `download/README.md`) : elle affiche la dernière version et garde les anciennes.
 
 Les versions 0.1.0 à 0.1.4 ont été publiées dans le dépôt `pc-assistant`, dont ce projet est issu.
