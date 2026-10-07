@@ -1,0 +1,24 @@
+# Page de téléchargement de l'agent sur un serveur qui a DÉJÀ un Traefik (modèle « Ubuntu avec n8n » de Hostinger).
+# Variables (fichier .env ou « Environment » du projet dans hPanel) : GIT_TOKEN (jeton GitHub en lecture seule), SITE_HOSTS (par défaut processxen.com).
+services:
+  download:
+    build:
+      context: https://x-access-token:${GIT_TOKEN:?GIT_TOKEN manquant}@github.com/patgarcia66240-cmd/pc-assistant.git#chore/frontend-audit-p1:remote-download
+      args:
+        GIT_TOKEN: ${GIT_TOKEN}
+    restart: unless-stopped
+    networks:
+      - traefik
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-n8n_default}
+      - traefik.http.routers.pc-download.rule=Host(`${SITE_HOST:-processxen.com}`) || Host(`www.${SITE_HOST:-processxen.com}`)
+      - traefik.http.routers.pc-download.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.pc-download.tls=true
+      - traefik.http.routers.pc-download.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-mytlschallenge}
+      - traefik.http.services.pc-download.loadbalancer.server.port=80
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-n8n_default}

@@ -1,0 +1,60 @@
+# Variante « sans SSH » pour le VPS Hostinger (modèle Ubuntu avec n8n et Traefik) : le code est récupéré directement depuis GitHub à la
+# construction de l'image (jeton en LECTURE SEULE), donc ce fichier se suffit à lui-même et peut être déployé depuis hPanel (Docker › Compose) ou l'API.
+# Variables obligatoires : GIT_TOKEN, DOMAIN, RENDEZVOUS_AGENT_KEY, RENDEZVOUS_CONTROLLER_KEY, TURN_SECRET.
+# Réglages de Traefik (valeurs du modèle n8n de Hostinger) : TRAEFIK_NETWORK=n8n_default, TRAEFIK_ENTRYPOINT=websecure, TRAEFIK_CERT_RESOLVER=mytlschallenge.
+services:
+  rendezvous:
+    build:
+      context: https://x-access-token:${GIT_TOKEN:?GIT_TOKEN manquant}@github.com/patgarcia66240-cmd/pc-assistant.git#chore/frontend-audit-p1
+      dockerfile: remote-rendezvous/Dockerfile
+    restart: unless-stopped
+    environment:
+      RENDEZVOUS_AGENT_KEY: ${RENDEZVOUS_AGENT_KEY:?manquant}
+      RENDEZVOUS_CONTROLLER_KEY: ${RENDEZVOUS_CONTROLLER_KEY:?manquant}
+      REMOTE_STUN_URLS: stun:${DOMAIN:?manquant}:3478
+      REMOTE_TURN_URLS: turn:${DOMAIN}:3478?transport=udp,turn:${DOMAIN}:3478?transport=tcp
+      REMOTE_TURN_SECRET: ${TURN_SECRET:?manquant}
+      REMOTE_PAIRING_CODE_TTL: ${PAIRING_CODE_TTL:-1800}
+      REMOTE_PAIR_RATE_LIMIT: ${PAIR_RATE_LIMIT:-10}
+    volumes:
+      - rendezvous-data:/app/backend/data
+    networks:
+      - traefik
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-n8n_default}
+      - traefik.http.routers.pc-rendezvous.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.pc-rendezvous.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.pc-rendezvous.tls=true
+      - traefik.http.routers.pc-rendezvous.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-mytlschallenge}
+      - traefik.http.services.pc-rendezvous.loadbalancer.server.port=8080
+
+  coturn:
+    image: coturn/coturn:4
+    restart: unless-stopped
+    network_mode: host
+    command: >
+      -n
+      --log-file=stdout
+      --listening-port=3478
+      --min-port=49152 --max-port=65535
+      --fingerprint
+      --use-auth-secret --static-auth-secret=${TURN_SECRET}
+      --realm=${DOMAIN}
+      --no-cli --no-tls --no-dtls
+      --no-multicast-peers
+      --denied-peer-ip=0.0.0.0-0.255.255.255
+      --denied-peer-ip=10.0.0.0-10.255.255.255
+      --denied-peer-ip=100.64.0.0-100.127.255.255
+      --denied-peer-ip=127.0.0.0-127.255.255.255
+      --denied-peer-ip=169.254.0.0-169.254.255.255
+      --denied-peer-ip=172.16.0.0-172.31.255.255
+      --denied-peer-ip=192.168.0.0-192.168.255.255
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-n8n_default}
+
+volumes:
+  rendezvous-data:

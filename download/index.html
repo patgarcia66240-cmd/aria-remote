@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ARIA Remote — agent Windows</title>
+<meta name="description" content="Agent Remote de PC Assistant pour Windows : permet à ARIA de se connecter à ce PC, avec ton accord.">
+<style>
+  :root { color-scheme: dark light; --bg:#0f1218; --panel:#171b24; --line:#262c38; --text:#e8ebf2; --muted:#9aa3b5; --accent:#4f7cf0; --accent-2:#3b63d1; --ok:#34d399; }
+  @media (prefers-color-scheme: light) { :root { --bg:#f4f6fb; --panel:#fff; --line:#dfe3ec; --text:#171b24; --muted:#5b6579; --accent:#3b63d1; --accent-2:#2f52b3; --ok:#059669; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:640px; margin:0 auto; padding:48px 16px 56px; }
+  .logo { width:56px; height:56px; border-radius:16px; background:linear-gradient(135deg,#6a7df0,#8b5cd6); display:grid; place-items:center; color:#fff; font-weight:700; font-size:26px; }
+  h1 { margin:18px 0 6px; font-size:30px; line-height:1.15; }
+  .lead { margin:0 0 28px; color:var(--muted); }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:20px; margin-top:16px; }
+  .download { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  .download b { display:block; font-size:18px; }
+  .meta { color:var(--muted); font-size:14px; }
+  a.button { display:inline-flex; align-items:center; gap:10px; background:var(--accent); color:#fff; text-decoration:none; font-weight:600; padding:12px 20px; border-radius:12px; min-height:44px; }
+  a.button:hover { background:var(--accent-2); }
+  a.button:focus-visible { outline:3px solid #fff; outline-offset:2px; box-shadow:0 0 0 5px var(--accent); }
+  h2 { margin:0 0 10px; font-size:17px; }
+  ol { margin:0; padding-left:22px; } li { margin:6px 0; }
+  code { font:13px ui-monospace,SFMono-Regular,Consolas,monospace; word-break:break-all; background:rgba(127,127,127,.14); padding:2px 6px; border-radius:6px; }
+  .hash { display:block; margin-top:8px; padding:8px 10px; }
+  .note { border-left:3px solid var(--ok); }
+  .warn { border-left:3px solid #f59e0b; }
+  p { margin:8px 0; }
+  footer { margin-top:28px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="logo" aria-hidden="true">A</div>
+  <h1>ARIA Remote</h1>
+  <p class="lead">L'agent Windows qui permet à ARIA de se connecter à ce PC — toujours avec ton accord.</p>
+
+  <section class="card download" aria-labelledby="dl-title">
+    <div>
+      <b id="dl-title">remote-agent.exe</b>
+      <span class="meta">Version __VERSION__ · Windows 64 bits · __SIZE__</span>
+    </div>
+    <a class="button" href="/remote-agent.exe" download>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 20h16"/></svg>
+      Télécharger
+    </a>
+  </section>
+
+  <section class="card">
+    <h2>Pour démarrer</h2>
+    <ol>
+      <li>Lance <code>remote-agent.exe</code>. Une fenêtre s'ouvre.</li>
+      <li>Saisis l'adresse du serveur et la clé de l'agent, qui t'ont été fournies. Elles sont retenues.</li>
+      <li>Un code à 6 chiffres s'affiche : saisis-le dans ARIA, onglet <b>Ordinateur › Maintenance à distance</b>.</li>
+      <li>Chaque prise de contrôle te demande ton accord. Tu peux la couper à tout moment.</li>
+    </ol>
+  </section>
+
+  <section class="card warn">
+    <h2>Windows affiche un avertissement ?</h2>
+    <p>Le fichier n'est pas encore signé par un éditeur reconnu : SmartScreen peut le signaler. Compare d'abord son empreinte (ci-dessous), puis clique sur <b>Informations complémentaires</b> › <b>Exécuter quand même</b>.</p>
+  </section>
+
+  <section class="card note">
+    <h2>Vérifier le fichier</h2>
+    <p class="meta">Empreinte SHA-256 — dans PowerShell : <code>Get-FileHash remote-agent.exe</code></p>
+    <code class="hash">__SHA256__</code>
+  </section>
+
+  <footer>Rien n'est installé en arrière-plan : l'agent ne tourne que tant que son programme est ouvert (bouton « Quitter » de sa fenêtre pour l'arrêter).</footer>
+</main>
+</body>
+</html>
