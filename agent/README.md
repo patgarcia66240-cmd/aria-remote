@@ -119,7 +119,7 @@ L'agent envoie `stats{fps, kbps, capture_ms, encode_ms, dropped, idle}` toutes l
   empreinte DTLS comprise : même avec la clé d'API, on ne peut pas se faire passer pour l'agent. À la connexion, l'agent signe un défi du serveur.
 - Les permissions sont **vérifiées par l'agent à chaque commande** (`src/input/mod.rs`), indépendamment du serveur et du contrôleur.
 - Pas de contournement de l'UAC ni de Ctrl+Alt+Suppr ; une session s'arrête à `stop`, `quit`, ou quand le contrôleur se déconnecte.
-- Limites connues : pas d'audio, un seul écran (le principal), pas de presse-papiers ni de fichiers (V2 du doc), mise à l'échelle DPI de Windows
+- Limites connues : pas d'audio, un seul écran (le principal), pas de presse-papiers ni de fichiers (V2 du doc)
   non traitée (coordonnées normalisées sur l'écran principal).
 
 ## Protocole WebSocket (`/api/remote/agent/ws?device_id=…`, en-tête `x-api-key`)

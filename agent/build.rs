@@ -13,6 +13,16 @@ fn main() {
     resource.set("CompanyName", "ARIA PC Assistant");
     resource.set("LegalCopyright", "© 2026 ARIA PC Assistant");
     resource.set("OriginalFilename", "remote-agent.exe");
+    // Sans cela, Windows ment au processus sur la taille des écrans (mise à l'échelle 125 %, 150 %…) : la capture (xcap) et la souris (enigo)
+    // ne comptent plus dans les mêmes pixels et le pointeur se décale. « PerMonitorV2 » : pixels réels sur chaque écran, même d'échelles différentes.
+    resource.set_manifest(r#"<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2,PerMonitor</dpiAwareness>
+    </windowsSettings>
+  </application>
+</assembly>"#);
     // La version vient de Cargo.toml (CARGO_PKG_VERSION). Un échec ici ne doit jamais empêcher de produire l'exe : on le signale seulement.
     if let Err(error) = resource.compile() {
         println!("cargo:warning=identité de l'exe non intégrée : {error}");
