@@ -230,6 +230,10 @@ impl Agent {
         let nonce = match signaling::receive(&mut socket).await {
             Some(Ok(ServerMessage::Challenge { nonce })) => nonce,
             None => return Ok(Outcome::NotPaired),
+            // Derrière un relais HTTPS (Render, Cloudflare…), la fermeture « appareil inconnu » du serveur arrive parfois comme une coupure
+            // sèche au lieu d'une trame de fermeture : même sens, on demande un code. Si le serveur est vraiment en panne, l'inscription échoue
+            // et l'erreur s'affiche.
+            Some(Err(_)) => return Ok(Outcome::NotPaired),
             other => bail!("réponse inattendue du serveur : {other:?}"),
         };
         let signature = self.identity.sign(&agent_auth_message(&self.config.device_id, &nonce));
