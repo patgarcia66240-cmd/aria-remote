@@ -377,7 +377,7 @@ def test_a_session_survives_a_websocket_drop_when_the_agent_resumes_it(remote):
 
 
 def test_messages_match_the_agent_wire_format():
-    """Mêmes octets que remote-agent/src/identity.rs (test messages_have_the_exact_wire_format_of_the_backend)."""
+    """Mêmes octets que agent/src/identity.rs (test messages_have_the_exact_wire_format_of_the_backend)."""
     assert identity.register_message("dev_bureau_0001", "Bureau", 1700000000, "abcdefghijklmnop") == \
         b"pc-assistant-remote-v1|register|dev_bureau_0001|Bureau|1700000000|abcdefghijklmnop"
     assert identity.agent_auth_message("dev_bureau_0001", "n0nce") == b"pc-assistant-remote-v1|agent|dev_bureau_0001|n0nce"

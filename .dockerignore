@@ -1,0 +1,5 @@
+plugin/tests
+**/__pycache__
+agent/target
+**/node_modules
+.git

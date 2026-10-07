@@ -553,7 +553,7 @@ Pendant la connexion :
 Architecture recommandée :
 
 ```text
-remote-agent/
+agent/
 ├── Cargo.toml
 └── src/
     ├── main.rs
@@ -731,7 +731,7 @@ pc-assistant/
 │       └── components/
 │           └── RemoteControl.jsx
 │
-├── remote-agent/
+├── agent/
 │   ├── Cargo.toml
 │   └── src/
 │       ├── main.rs
@@ -904,18 +904,18 @@ FICHIERS + PRESSE-PAPIERS + AUDIO + TERMINAL
 | STUN/TURN (`REMOTE_STUN_URLS`, `REMOTE_TURN_*`, identifiants TURN éphémères) | fait, vide par défaut |
 | Code d'appairage : 30 minutes par défaut, réglable (`REMOTE_PAIRING_CODE_TTL`) | fait |
 | Frontend : sous-onglet « Maintenance à distance » de la page Ordinateur (`RemoteControl.jsx`) | fait, testé |
-| `remote-agent/` (Rust) : identité, signaling, WebRTC, capture, souris, clavier | fait ; testé sous Linux (écran de test) et de bout en bout avec un vrai navigateur ; **compile pour Windows mais non essayé sur un vrai bureau Windows** |
+| `agent/` (Rust) : identité, signaling, WebRTC, capture, souris, clavier | fait ; testé sous Linux (écran de test) et de bout en bout avec un vrai navigateur ; **compile pour Windows mais non essayé sur un vrai bureau Windows** |
 
 Écarts avec les schémas ci-dessus : l'écran est transporté en **images JPEG sur un canal de données WebRTC** (simple, sans encodeur vidéo) et non en
 flux vidéo H.264/VP8 ; le débit est donc plus élevé qu'AnyDesk. Un flux vidéo pourra remplacer ce canal sans toucher au signaling ni aux permissions.
-Le plugin est désactivé par défaut (`enabled_by_default: false`) : à activer dans la page Plugins. Détails de l'agent : `remote-agent/README.md`.
+Le plugin est désactivé par défaut (`enabled_by_default: false`) : à activer dans la page Plugins. Détails de l'agent : `agent/README.md`.
 
 ---
 
 # 24. Accès par Internet : le serveur de rendez-vous
 
 Sur un même réseau, l'agent se connecte au backend de PC Assistant. **Par Internet**, un PC derrière une box n'est joignable ni par son adresse IP ni
-directement : il faut un point de rencontre public, comme chez TeamViewer. C'est `remote-rendezvous/` :
+directement : il faut un point de rencontre public, comme chez TeamViewer. C'est `rendezvous/` :
 
 ```text
 PC contrôlé (agent) ──sortant──► Serveur de rendez-vous ◄──sortant── PC Assistant (contrôleur)
@@ -933,5 +933,5 @@ PC contrôlé (agent) ──sortant──► Serveur de rendez-vous ◄──sor
   quelques secondes. La protection repose sur des signatures de clés d'appareil, l'accord de l'utilisateur et la limite d'essais. Chiffrer la négociation de
   bout en bout (PAKE) est l'étape suivante, pas un préalable.
 
-Déploiement et sécurité détaillés : `remote-rendezvous/README.md`.
+Déploiement et sécurité détaillés : `rendezvous/README.md`.
 

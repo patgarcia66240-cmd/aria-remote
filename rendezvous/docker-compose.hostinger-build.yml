@@ -12,4 +12,4 @@ services:
     command:
       - sh
       - -c
-      - docker build -t pc-rendezvous:local -f remote-rendezvous/Dockerfile "https://x-access-token:$${GIT_TOKEN}@github.com/patgarcia66240-cmd/pc-assistant.git#chore/frontend-audit-p1" && echo BUILD-OK
+      - docker build -t pc-rendezvous:local -f rendezvous/Dockerfile "https://x-access-token:$${GIT_TOKEN}@github.com/patgarcia66240-cmd/aria-remote.git#main" && echo BUILD-OK

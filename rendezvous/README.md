@@ -24,7 +24,7 @@ PC contrôlé (agent)  ──connexion sortante──►  Serveur de rendez-vous
 ## Installation
 
 ```bash
-cd remote-rendezvous
+cd rendezvous
 cp .env.example .env
 # Génère trois secrets différents :   openssl rand -hex 32
 # Remplis .env : DOMAIN, RENDEZVOUS_AGENT_KEY, RENDEZVOUS_CONTROLLER_KEY, TURN_SECRET
@@ -47,8 +47,8 @@ Le modèle « Ubuntu 24.04 with n8n » utilise **Traefik sur les ports 80 et 443
 2. **Terminal** : ouvre le terminal du VPS (terminal du navigateur dans hPanel, ou SSH).
 3. **Récupérer le code** : le dépôt est privé. Crée sur GitHub un jeton à accès fin, **lecture seule** du contenu de ce dépôt, puis :
    ```bash
-   git clone -b chore/frontend-audit-p1 https://<JETON>@github.com/patgarcia66240-cmd/pc-assistant.git
-   cd pc-assistant/remote-rendezvous
+   git clone -b main https://<JETON>@github.com/patgarcia66240-cmd/aria-remote.git
+   cd aria-remote/rendezvous
    ```
    Révoque le jeton ensuite (ou supprime-le) : il n'est plus utile, sauf pour les mises à jour.
 4. **Installer** : `sudo ./install-vps.sh --domain rendezvous.mondomaine.fr` (ou `--sslip`). Teste d'abord avec `--dry-run` : il montre tout ce qui serait fait sans rien exécuter.
@@ -65,7 +65,7 @@ un état en mémoire (codes, sessions).
 ## Vérifier un déploiement
 
 ```bash
-python remote-rendezvous/check_server.py https://rendezvous.exemple.fr
+python rendezvous/check_server.py https://rendezvous.exemple.fr
 ```
 
 L'outil lit les clés dans `RENDEZVOUS_AGENT_KEY` et `RENDEZVOUS_CONTROLLER_KEY` (ou les demande, sans les afficher) et vérifie : réponse de `/health` (il
@@ -95,7 +95,7 @@ navigateur ne la voit jamais.
 
 ## Brancher un PC contrôlé (l'agent)
 
-Lance l'agent (`remote-agent/`) ; au premier lancement, sa fenêtre demande :
+Lance l'agent (`agent/`) ; au premier lancement, sa fenêtre demande :
 
 - **Adresse du serveur** : `https://TON_DOMAINE`
 - **Clé** : `RENDEZVOUS_AGENT_KEY`

@@ -140,7 +140,7 @@ async def ice_candidate(body: IceBody) -> dict:
 @router.websocket("/agent/ws")
 async def agent_socket(websocket: WebSocket, device_id: str = Query(pattern=ID_PATTERN)) -> None:
     """Canal de l'agent Remote (clé d'API exigée, comme partout). L'agent prouve ensuite qu'il détient la clé privée de l'appareil en signant un
-    défi ; sans cela il n'est jamais déclaré « en ligne ». Messages : voir remote-agent/README.md."""
+    défi ; sans cela il n'est jamais déclaré « en ligne ». Messages : voir agent/README.md."""
     device = service.store.get(device_id)
     await websocket.accept()
     if device is None or not device.paired:

@@ -1,4 +1,4 @@
-"""Serveur de rendez-vous (remote-rendezvous/) : clés séparées agent / contrôleur, parcours complet par WebSocket, et mode relais du plugin."""
+"""Serveur de rendez-vous (rendezvous/) : clés séparées agent / contrôleur, parcours complet par WebSocket, et mode relais du plugin."""
 import importlib.util
 import threading
 import time
@@ -19,7 +19,7 @@ from plugin_sdk.ports import ports
 from plugins.remote.service import service
 from tests.test_remote_plugin import DEVICE, Agent
 
-APP_PATH = Path(__file__).resolve().parent.parent.parent / "remote-rendezvous" / "app.py"
+APP_PATH = Path(__file__).resolve().parent.parent.parent / "rendezvous" / "app.py"
 AGENT_KEY = "a" * 40
 CONTROLLER_KEY = "c" * 40
 
@@ -217,8 +217,8 @@ def test_every_third_party_import_of_the_image_is_in_the_rendezvous_requirements
             names = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or ""] if isinstance(node, ast.ImportFrom) and not node.level else []
             imported |= {name.split(".")[0] for name in names if name}
     third_party = {name for name in imported if name not in sys.stdlib_module_names and name not in local and name != "__future__"}
-    requirements = (root.parent / "remote-rendezvous" / "requirements.txt").read_text(encoding="utf-8")
+    requirements = (root.parent / "rendezvous" / "requirements.txt").read_text(encoding="utf-8")
     listed = {line.split("#")[0].strip().split("[")[0].split(">")[0].split("<")[0].split("=")[0].strip().lower().replace("_", "-")
               for line in requirements.splitlines() if line.split("#")[0].strip()}
     missing = sorted(package_of.get(name, name).lower().replace("_", "-") for name in third_party) 
-    assert [m for m in missing if m not in listed] == [], f"à ajouter à remote-rendezvous/requirements.txt : {[m for m in missing if m not in listed]}"
+    assert [m for m in missing if m not in listed] == [], f"à ajouter à rendezvous/requirements.txt : {[m for m in missing if m not in listed]}"

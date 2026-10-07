@@ -2,7 +2,7 @@
 partie PUBLIQUE arrive ici. L'appareil prouve qu'il détient la clé privée en signant des messages ; le code d'appairage, lui, ne prouve rien.
 
 Les messages signés sont des champs joints par « | », préfixés par une version et un type (séparation des usages : une signature d'enregistrement
-ne vaut jamais réponse de signaling). L'agent Rust (remote-agent/src/identity.rs) construit exactement les mêmes octets."""
+ne vaut jamais réponse de signaling). L'agent Rust (agent/src/identity.rs) construit exactement les mêmes octets."""
 from __future__ import annotations
 
 import base64

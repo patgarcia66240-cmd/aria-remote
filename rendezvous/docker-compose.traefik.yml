@@ -7,7 +7,7 @@ services:
   rendezvous:
     build:
       context: ..
-      dockerfile: remote-rendezvous/Dockerfile
+      dockerfile: rendezvous/Dockerfile
     restart: unless-stopped
     environment:
       RENDEZVOUS_AGENT_KEY: ${RENDEZVOUS_AGENT_KEY:?Définis RENDEZVOUS_AGENT_KEY dans .env}

@@ -22,7 +22,7 @@ from pathlib import Path
 
 # Le plugin et ses modules communs vivent dans backend/ (voir Dockerfile : seuls les fichiers nécessaires y sont copiés).
 _HERE = Path(__file__).resolve().parent
-# Dans l'image : /app/app.py et /app/backend ; dans le dépôt : remote-rendezvous/app.py et backend/.
+# Dans l'image : /app/app.py et /app/backend ; dans le dépôt : rendezvous/app.py et backend/.
 BACKEND = Path(os.environ.get("RENDEZVOUS_BACKEND_DIR") or next((p for p in (_HERE / "backend", _HERE.parent / "backend") if p.exists()), _HERE.parent / "backend"))
 sys.path.insert(0, str(BACKEND))
 # config.py génère et écrit des clés pour d'autres plugins s'il n'en trouve pas : inutile ici, on évite d'écrire un .env.

@@ -119,7 +119,7 @@ describe('Contrôle à distance (page Ordinateur)', () => {
 
   it('explique comment installer l\'agent quand aucun appareil n\'existe', async () => {
     await render({ devices: [], status: { agent_installed: false, agents_online: 0, turn_configured: false } })
-    expect(host.textContent).toContain('remote-agent/')
+    expect(host.textContent).toContain('agent/')
     expect(host.textContent).toContain('REMOTE_RENDEZVOUS_URL')
   })
 

@@ -11,7 +11,7 @@ Navigateur (PC Assistant)  ──signaling──►  Backend FastAPI  ◄──W
 
 ## Accès par Internet
 
-Pour contrôler un PC situé ailleurs (autre réseau, autre ville), déploie le **serveur de rendez-vous** (`remote-rendezvous/README.md`) puis, dans la
+Pour contrôler un PC situé ailleurs (autre réseau, autre ville), déploie le **serveur de rendez-vous** (`rendezvous/README.md`) puis, dans la
 fenêtre de l'agent, saisis son adresse (`https://ton-domaine`) et la clé des agents. L'agent s'y connecte de lui-même : aucun port à ouvrir sur ce PC.
 Sur un même réseau, l'adresse du backend de PC Assistant (`192.168.1.20:8000`) suffit.
 
@@ -19,7 +19,7 @@ Sur un même réseau, l'adresse du backend de PC Assistant (`192.168.1.20:8000`)
 
 ```powershell
 .\remote-agent\start-agent.ps1          # Windows (PowerShell), depuis n'importe quel dossier
-./remote-agent/start-agent.sh           # Linux / macOS
+./agent/start-agent.sh           # Linux / macOS
 ```
 
 Le script se place dans le bon dossier, lit la clé d'API (`API_AUTH_TOKEN`) dans `backend/.env`, vérifie que Rust est installé et autorise la

@@ -2,8 +2,8 @@
 # Installe le serveur de rendez-vous sur un VPS Linux (Hostinger ou autre) : Docker, secrets, pare-feu, HTTPS (Caddy) et relais (coturn).
 #
 # À lancer SUR LE VPS, depuis une copie du dépôt, en root (ou avec sudo) :
-#   git clone -b chore/frontend-audit-p1 https://github.com/patgarcia66240-cmd/pc-assistant.git
-#   cd pc-assistant/remote-rendezvous
+#   git clone -b main https://github.com/patgarcia66240-cmd/aria-remote.git
+#   cd aria-remote/rendezvous
 #   sudo ./install-vps.sh --domain rendezvous.mondomaine.fr
 #   sudo ./install-vps.sh --sslip            # sans nom de domaine : utilise <ip>.sslip.io (HTTPS valide quand même)
 #

@@ -2,7 +2,7 @@ import { apiErrorMessage } from '../apiRuntime'
 
 // Appels, négociation WebRTC et traduction des entrées pour le contrôle à distance
 // (backend/plugins/remote, docs/REMOTE_ARCHITECTURE.md). Le navigateur est le CONTRÔLEUR : il propose l'offre,
-// l'agent (remote-agent/) répond. Le backend ne fait que relayer le signaling ; l'écran et les commandes passent
+// l'agent (agent/) répond. Le backend ne fait que relayer le signaling ; l'écran et les commandes passent
 // par deux canaux de données WebRTC :
 //   « frames »  : l'agent envoie une image JPEG par message (binaire) ;
 //   « control » : JSON dans les deux sens (infos écran, souris, clavier).

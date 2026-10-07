@@ -3,7 +3,7 @@
 services:
   download:
     build:
-      context: https://x-access-token:${GIT_TOKEN:?GIT_TOKEN manquant}@github.com/patgarcia66240-cmd/pc-assistant.git#chore/frontend-audit-p1:remote-download
+      context: https://x-access-token:${GIT_TOKEN:?GIT_TOKEN manquant}@github.com/patgarcia66240-cmd/aria-remote.git#main:download
       args:
         GIT_TOKEN: ${GIT_TOKEN}
     restart: unless-stopped

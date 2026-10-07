@@ -1,7 +1,7 @@
 """Mode « serveur de rendez-vous » du plugin Remote (accès par Internet, docs/REMOTE_ARCHITECTURE.md §24).
 
 Avec REMOTE_RENDEZVOUS_URL, ce backend ne garde plus lui-même les appareils, les codes et les sessions : il relaie les appels de l'interface vers le
-serveur de rendez-vous public (remote-rendezvous/), avec la clé du CONTRÔLEUR. L'interface ne change pas (mêmes routes /api/remote/*) et la clé du
+serveur de rendez-vous public (rendezvous/), avec la clé du CONTRÔLEUR. L'interface ne change pas (mêmes routes /api/remote/*) et la clé du
 serveur ne quitte jamais ce backend : le navigateur ne la voit pas. Les agents, eux, se connectent DIRECTEMENT au serveur de rendez-vous
 (ils n'ont pas besoin d'atteindre ce PC)."""
 from __future__ import annotations

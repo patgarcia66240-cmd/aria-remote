@@ -1,5 +1,5 @@
 # Compile l'agent Remote pour Windows et publie remote-agent.exe.
-#   - À chaque changement de remote-agent/ : tests + compilation sous Windows (l'exe est gardé 30 jours comme « artefact » de l'exécution).
+#   - À chaque changement de agent/ : tests + compilation sous Windows (l'exe est gardé 30 jours comme « artefact » de l'exécution).
 #   - Avec une étiquette « agent-vX.Y.Z » (git tag agent-v0.1.0 && git push origin agent-v0.1.0) : l'exe et son empreinte SHA-256 sont
 #     joints à une version (Release) du dépôt, d'où la page de téléchargement les récupère.
 #   - À la main : onglet Actions › « Agent Windows » › Run workflow.
@@ -7,8 +7,8 @@ name: Agent Windows
 
 on:
   push:
-    branches: [chore/frontend-audit-p1, main]
-    paths: ['remote-agent/**', '.github/workflows/build-agent.yml']
+    branches: [main, main]
+    paths: ['agent/**', '.github/workflows/build-agent.yml']
     tags: ['agent-v*']
   workflow_dispatch:
 
@@ -21,19 +21,19 @@ jobs:
     # Signature (facultative) : renseigne ces secrets dans GitHub › Settings › Secrets and variables › Actions pour que l'exe sorte SIGNÉ.
     #   WINDOWS_CERT_PFX_BASE64 : le certificat de signature de code (.pfx), encodé en base64
     #   WINDOWS_CERT_PASSWORD   : son mot de passe
-    # Sans ces secrets, l'exe est produit non signé (SmartScreen affichera « Éditeur inconnu »). Voir remote-agent/README.md.
+    # Sans ces secrets, l'exe est produit non signé (SmartScreen affichera « Éditeur inconnu »). Voir agent/README.md.
     env:
       WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
       WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
     defaults:
       run:
-        working-directory: remote-agent
+        working-directory: agent
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: remote-agent
+          workspaces: agent
 
       # Les tests tournent AUSSI sous Windows : c'est là que la vraie saisie (enigo), la capture (xcap) et la boîte de dialogue (rfd) sont compilées.
       # En mode release : la compilation est réutilisée par l'étape suivante (au lieu d'être faite deux fois). Sur une étiquette de version, les tests ont déjà
@@ -90,8 +90,8 @@ jobs:
         with:
           name: remote-agent-windows
           path: |
-            remote-agent/target/release/remote-agent.exe
-            remote-agent/target/release/remote-agent.exe.sha256
+            agent/target/release/remote-agent.exe
+            agent/target/release/remote-agent.exe.sha256
           retention-days: 30
           if-no-files-found: error
 

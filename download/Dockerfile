@@ -4,7 +4,7 @@
 # et n'est jamais dans l'image finale.
 FROM alpine:3.20 AS fetch
 ARG GIT_TOKEN
-ARG REPO=patgarcia66240-cmd/pc-assistant
+ARG REPO=patgarcia66240-cmd/aria-remote
 RUN apk add --no-cache curl jq
 WORKDIR /dl
 COPY fetch.sh /dl/fetch.sh

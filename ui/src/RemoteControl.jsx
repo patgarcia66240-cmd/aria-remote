@@ -241,7 +241,7 @@ export default function RemoteControl({ isActive = true }) {
                 Aucun appareil.{status?.mode === 'rendezvous'
                   ? ' Sur le PC à contrôler, lance l\'agent Remote avec l\'adresse du serveur de rendez-vous, puis saisis ici le code à 6 chiffres qu\'il affiche.'
                   : status && !status.agent_installed
-                    ? ' Installe l\'agent Remote sur le PC à contrôler (dossier remote-agent/), puis saisis ici le code à 6 chiffres qu\'il affiche.'
+                    ? ' Installe l\'agent Remote sur le PC à contrôler (dossier agent/), puis saisis ici le code à 6 chiffres qu\'il affiche.'
                     : ' Saisis le code à 6 chiffres affiché par l\'agent.'}
               </p>
             ) : (
@@ -270,7 +270,7 @@ export default function RemoteControl({ isActive = true }) {
             </p>
           ) : status && !status.turn_configured && (
             <p className="text-xs text-gray-500">
-              Sur le même réseau, rien à régler. Via Internet, utilise un serveur de rendez-vous (REMOTE_RENDEZVOUS_URL dans backend/.env, voir remote-rendezvous/README.md),
+              Sur le même réseau, rien à régler. Via Internet, utilise un serveur de rendez-vous (REMOTE_RENDEZVOUS_URL dans backend/.env, voir rendezvous/README.md),
               ou configure un serveur STUN/TURN (REMOTE_STUN_URLS, REMOTE_TURN_URLS).
             </p>
           )}

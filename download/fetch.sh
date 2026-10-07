@@ -4,12 +4,11 @@
 #   remote-agent.exe, remote-agent.exe.sha256   : la plus récente (le bouton principal de la page) ;
 #   version.txt, sha256.txt, size.txt           : ses valeurs, pour remplir la page ;
 #   rows.html                                   : la liste de toutes les versions (section « Toutes les versions »).
-# Variables : GIT_TOKEN (jeton GitHub en lecture seule), REPO (propriétaire/dépôt).
+# Variables : REPO (propriétaire/dépôt) ; GIT_TOKEN facultatif (inutile pour un dépôt public, évite seulement la limite de requêtes anonymes).
 set -eu
-[ -n "${GIT_TOKEN:-}" ] || { echo "GIT_TOKEN manquant (jeton GitHub en lecture seule)"; exit 1; }
-REPO="${REPO:-patgarcia66240-cmd/pc-assistant}"
+REPO="${REPO:-patgarcia66240-cmd/aria-remote}"
 api="https://api.github.com/repos/${REPO}/releases"
-get() { curl -fsSL -H "Authorization: Bearer ${GIT_TOKEN}" "$@"; }
+get() { if [ -n "${GIT_TOKEN:-}" ]; then curl -fsSL -H "Authorization: Bearer ${GIT_TOKEN}" "$@"; else curl -fsSL "$@"; fi; }
 
 releases="$(get -H "Accept: application/vnd.github+json" "${api}?per_page=50" \
   | jq -c '[.[] | select(.draft | not) | select(.tag_name | startswith("agent-v"))]')"
