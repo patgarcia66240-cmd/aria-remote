@@ -1,0 +1,10 @@
+# HTTPS automatique (Let's Encrypt) pour DOMAIN : HTTP, WebSocket (wss://) compris. Le DNS de DOMAIN doit pointer vers ce serveur.
+{$DOMAIN} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+	reverse_proxy rendezvous:8080
+}

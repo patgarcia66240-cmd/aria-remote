@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from plugin_sdk.errors import PluginError
 from plugin_sdk.router import plugin_router
 
-from . import ice, identity
+from . import ice, identity, proxy
 from .gateway import AgentConnection, hub
 from .models import ID_PATTERN, MAX_ICE_SIZE, MAX_SDP
 from .service import service
@@ -59,8 +59,8 @@ class IceBody(BaseModel):
 async def status() -> dict:
     """Le module est-il opérationnel ? Sans agent branché, aucune session ne peut s'ouvrir."""
     active = service.active_session()
-    return {"agent_installed": service.agent_installed(), "agents_online": len(hub.connections), "active_session": active.to_dict() if active else None,
-            "turn_configured": any("username" in server for server in ice.ice_servers())}
+    return {"mode": "local", "agent_installed": service.agent_installed(), "agents_online": len(hub.connections),
+            "active_session": active.to_dict() if active else None, "turn_configured": any("username" in server for server in ice.ice_servers())}
 
 
 @router.get("/ice-servers")
@@ -202,3 +202,8 @@ async def _agent_message(connection: AgentConnection, message: dict) -> None:
 
 
 router.include_router(pairing_router)
+
+
+# Accès par Internet : avec REMOTE_RENDEZVOUS_URL, ce plugin ne gère plus les appareils lui-même, il relaie vers le serveur de rendez-vous (proxy.py).
+if proxy.configured():
+    router = proxy.build_router()

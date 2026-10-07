@@ -200,7 +200,11 @@ export default function RemoteControl({ isActive = true }) {
             <h3 className="text-sm font-semibold text-gray-200">Appareils</h3>
             {devices.length === 0 ? (
               <p className="mt-2 text-sm text-gray-400">
-                Aucun appareil.{status && !status.agent_installed ? ' Installe l\'agent Remote sur le PC à contrôler (dossier remote-agent/), puis saisis ici le code à 6 chiffres qu\'il affiche.' : ' Saisis le code à 6 chiffres affiché par l\'agent.'}
+                Aucun appareil.{status?.mode === 'rendezvous'
+                  ? ' Sur le PC à contrôler, lance l\'agent Remote avec l\'adresse du serveur de rendez-vous, puis saisis ici le code à 6 chiffres qu\'il affiche.'
+                  : status && !status.agent_installed
+                    ? ' Installe l\'agent Remote sur le PC à contrôler (dossier remote-agent/), puis saisis ici le code à 6 chiffres qu\'il affiche.'
+                    : ' Saisis le code à 6 chiffres affiché par l\'agent.'}
               </p>
             ) : (
               <ul className="mt-3 space-y-2">
@@ -221,9 +225,14 @@ export default function RemoteControl({ isActive = true }) {
             </div>
           </form>
 
-          {status && !status.turn_configured && (
+          {status?.mode === 'rendezvous' ? (
             <p className="text-xs text-gray-500">
-              Sur le même réseau, rien à régler. Via Internet, configure un serveur STUN/TURN (REMOTE_STUN_URLS, REMOTE_TURN_URLS dans backend/.env).
+              Accès par Internet via le serveur de rendez-vous {status.server}. Les appareils s\'y connectent d\'eux-mêmes : aucun port à ouvrir chez eux.
+            </p>
+          ) : status && !status.turn_configured && (
+            <p className="text-xs text-gray-500">
+              Sur le même réseau, rien à régler. Via Internet, utilise un serveur de rendez-vous (REMOTE_RENDEZVOUS_URL dans backend/.env, voir remote-rendezvous/README.md),
+              ou configure un serveur STUN/TURN (REMOTE_STUN_URLS, REMOTE_TURN_URLS).
             </p>
           )}
         </>

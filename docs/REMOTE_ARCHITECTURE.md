@@ -910,3 +910,28 @@ FICHIERS + PRESSE-PAPIERS + AUDIO + TERMINAL
 flux vidéo H.264/VP8 ; le débit est donc plus élevé qu'AnyDesk. Un flux vidéo pourra remplacer ce canal sans toucher au signaling ni aux permissions.
 Le plugin est désactivé par défaut (`enabled_by_default: false`) : à activer dans la page Plugins. Détails de l'agent : `remote-agent/README.md`.
 
+---
+
+# 24. Accès par Internet : le serveur de rendez-vous
+
+Sur un même réseau, l'agent se connecte au backend de PC Assistant. **Par Internet**, un PC derrière une box n'est joignable ni par son adresse IP ni
+directement : il faut un point de rencontre public, comme chez TeamViewer. C'est `remote-rendezvous/` :
+
+```text
+PC contrôlé (agent) ──sortant──► Serveur de rendez-vous ◄──sortant── PC Assistant (contrôleur)
+         ◄──────── écran + commandes en direct (WebRTC) — relais coturn si besoin ────────►
+```
+
+- Le serveur **réutilise le plugin Remote** tel quel (même protocole, mêmes tests) dans une application minimale : aucun autre plugin n'est exposé.
+- **Deux clés** : `RENDEZVOUS_AGENT_KEY` (agents seulement) et `RENDEZVOUS_CONTROLLER_KEY` (contrôleur seulement). Une clé d'agent qui fuit ne permet ni
+  de lister les appareils ni d'ouvrir une session.
+- Côté PC Assistant, `REMOTE_RENDEZVOUS_URL` et `REMOTE_RENDEZVOUS_KEY` activent un **mode relais** : le plugin transmet les appels de l'interface
+  au serveur, avec la clé du contrôleur (que le navigateur ne voit jamais). L'interface ne change pas.
+- L'adresse IP n'est jamais saisie : l'agent est retrouvé par son identifiant ; les adresses de connexion directe (candidats ICE) s'échangent dans la
+  négociation, et le relais coturn prend le relais quand le routeur bloque.
+- **Pourquoi pas « chiffrer l'adresse avec le code » ?** Un code à 6 chiffres n'offre qu'un million de clés possibles : il se retrouve par force brute en
+  quelques secondes. La protection repose sur des signatures de clés d'appareil, l'accord de l'utilisateur et la limite d'essais. Chiffrer la négociation de
+  bout en bout (PAKE) est l'étape suivante, pas un préalable.
+
+Déploiement et sécurité détaillés : `remote-rendezvous/README.md`.
+

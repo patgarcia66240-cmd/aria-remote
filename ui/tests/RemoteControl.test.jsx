@@ -81,6 +81,13 @@ describe('Contrôle à distance (page Ordinateur)', () => {
   it('explique comment installer l\'agent quand aucun appareil n\'existe', async () => {
     await render({ devices: [], status: { agent_installed: false, agents_online: 0, turn_configured: false } })
     expect(host.textContent).toContain('remote-agent/')
-    expect(host.textContent).toContain('REMOTE_STUN_URLS')
+    expect(host.textContent).toContain('REMOTE_RENDEZVOUS_URL')
+  })
+
+  it('en mode serveur de rendez-vous, explique que les appareils s\'y connectent seuls', async () => {
+    await render({ devices: [], status: { mode: 'rendezvous', server: 'https://rv.exemple.fr', agent_installed: false, agents_online: 0, turn_configured: true } })
+    expect(host.textContent).toContain('serveur de rendez-vous https://rv.exemple.fr')
+    expect(host.textContent).toContain('aucun port à ouvrir')
+    expect(host.textContent).not.toContain('REMOTE_STUN_URLS')
   })
 })

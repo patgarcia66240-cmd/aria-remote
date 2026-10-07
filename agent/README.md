@@ -9,6 +9,12 @@ Navigateur (PC Assistant)  ──signaling──►  Backend FastAPI  ◄──W
          └──────────────── WebRTC (écran en JPEG + commandes, chiffré) ───────────┘
 ```
 
+## Accès par Internet
+
+Pour contrôler un PC situé ailleurs (autre réseau, autre ville), déploie le **serveur de rendez-vous** (`remote-rendezvous/README.md`) puis, dans la
+fenêtre de l'agent, saisis son adresse (`https://ton-domaine`) et la clé des agents. L'agent s'y connecte de lui-même : aucun port à ouvrir sur ce PC.
+Sur un même réseau, l'adresse du backend de PC Assistant (`192.168.1.20:8000`) suffit.
+
 ## Lancer en une commande
 
 ```powershell
