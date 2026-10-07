@@ -10,7 +10,7 @@ const PRIMARY = `${BUTTON} bg-blue-600 text-white hover:bg-blue-500`
 const SECONDARY = `${BUTTON} border border-gray-600 text-gray-200 hover:bg-gray-700`
 
 const STATE_TEXT = {
-  asking: 'En attente de l\'acceptation sur l\'appareil…',
+  asking: 'Acceptation sur l\'appareil…',
   connecting: 'Connexion en cours…',
   connected: 'Connecté',
   reconnecting: 'Connexion perdue, reconnexion…',
@@ -107,10 +107,12 @@ function Screen({ link, sinkRef, cursorRef, info, onClose, state, permissions })
   )
 }
 
-function DeviceRow({ device, busy, onConnect }) {
+function DeviceRow({ device, busy, waiting, onConnect }) {
   const optional = ['control_mouse', 'control_keyboard'].filter((p) => device.granted.includes(p))
-  const [chosen, setChosen] = useState([])
-  const toggle = (permission) => setChosen((prev) => (prev.includes(permission) ? prev.filter((p) => p !== permission) : [...prev, permission]))
+  // Tout ce que l'appareil autorise est activé par défaut ; on retient seulement ce que la personne désactive.
+  const [off, setOff] = useState([])
+  const chosen = optional.filter((permission) => !off.includes(permission))
+  const toggle = (permission) => setOff((prev) => (prev.includes(permission) ? prev.filter((p) => p !== permission) : [...prev, permission]))
   return (
     <li className="flex items-center gap-3 rounded-xl border border-gray-700 bg-gray-900/40 px-3 py-2">
       <div className="min-w-0 flex-1">
@@ -121,13 +123,19 @@ function DeviceRow({ device, busy, onConnect }) {
           {!device.paired && ' · pas appairé'}
         </p>
       </div>
+      {waiting && (
+        <span role="status" className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-amber-300">
+          <svg {...ICON} className="animate-spin" strokeOpacity="0.9"><path d="M21 12a9 9 0 1 1-6.2-8.55" /></svg>
+          <span className="animate-pulse">{STATE_TEXT[waiting] || waiting}</span>
+        </span>
+      )}
       {device.paired && optional.map((permission) => {
         const on = chosen.includes(permission)
         const label = PERMISSION_LABEL[permission]
         return (
-          <button key={permission} type="button" aria-pressed={on} aria-label={label} title={`${label} : ${on ? 'activée pour la session' : 'désactivée'}`}
+          <button key={permission} type="button" aria-pressed={on} aria-label={label} disabled={busy} title={`${label} : ${on ? 'activée' : 'désactivée'}`}
             onClick={() => toggle(permission)}
-            className={`inline-flex size-10 cursor-pointer items-center justify-center rounded-lg border transition-colors ${on ? 'border-blue-400 bg-blue-600 text-white shadow-[0_0_0_3px_rgba(96,165,250,0.25)]' : 'border-gray-600 text-gray-500 hover:bg-gray-700 hover:text-gray-300'}`}>
+            className={`inline-flex size-10 cursor-pointer items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${on ? 'border-blue-400 bg-blue-600 text-white shadow-[0_0_0_3px_rgba(96,165,250,0.25)]' : 'border-gray-600 text-gray-500 hover:bg-gray-700 hover:text-gray-300'}`}>
             {PERMISSION_ICON[permission]}
           </button>
         )
@@ -149,6 +157,7 @@ export default function RemoteControl({ isActive = true }) {
   const [error, setError] = useState('')
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
+  const [connectingId, setConnectingId] = useState('')
   const [live, setLive] = useState(null)       // { link, device, permissions }
   const [state, setState] = useState('')
   const [info, setInfo] = useState(null)
@@ -189,6 +198,8 @@ export default function RemoteControl({ isActive = true }) {
 
   const connect = async (device, permissions) => {
     setBusy(true)
+    setConnectingId(device.device_id)
+    setState('')
     setError('')
     setInfo(null)
     try {
@@ -235,10 +246,9 @@ export default function RemoteControl({ isActive = true }) {
               </p>
             ) : (
               <ul className="mt-2 space-y-2">
-                {devices.map((device) => <DeviceRow key={device.device_id} device={device} busy={busy} onConnect={connect} />)}
+                {devices.map((device) => <DeviceRow key={device.device_id} device={device} busy={busy} waiting={busy && connectingId === device.device_id ? state : ''} onConnect={connect} />)}
               </ul>
             )}
-            {busy && state === 'asking' && <p role="status" className="mt-3 text-sm text-amber-300">{STATE_TEXT.asking}</p>}
           </section>
 
           <form onSubmit={pair} className={`${CARD} flex flex-wrap items-center justify-between gap-3`}>

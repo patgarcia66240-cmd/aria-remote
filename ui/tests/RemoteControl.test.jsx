@@ -56,17 +56,32 @@ describe('Contrôle à distance (page Ordinateur)', () => {
     expect(rows[1].querySelector('button[aria-pressed]')).toBeNull()
   })
 
-  it('les icônes souris et clavier se basculent et décident des permissions demandées à la connexion', async () => {
+  it('souris et clavier sont activés par défaut ; une icône désactivée n\'est pas demandée à la connexion', async () => {
     const fetchMock = await render({ devices: [{ ...DEVICES[0], granted: ['view_screen', 'control_mouse', 'control_keyboard'] }] })
     const mouse = host.querySelector('button[aria-label="Souris"]')
     const keyboard = host.querySelector('button[aria-label="Clavier"]')
-    expect(mouse.getAttribute('aria-pressed')).toBe('false')
-    await act(async () => mouse.click())
     expect(mouse.getAttribute('aria-pressed')).toBe('true')
-    expect(keyboard.getAttribute('aria-pressed')).toBe('false')
+    expect(keyboard.getAttribute('aria-pressed')).toBe('true')
+    await act(async () => mouse.click())
+    expect(mouse.getAttribute('aria-pressed')).toBe('false')
+    expect(keyboard.getAttribute('aria-pressed')).toBe('true')
     await act(async () => host.querySelector('button[aria-label^="Se connecter"]').click())
     const call = fetchMock.mock.calls.find(([url]) => url === '/api/remote/sessions')
-    expect(JSON.parse(call[1].body)).toEqual({ device_id: 'dev_bureau_0001', permissions: ['view_screen', 'control_mouse'] })
+    expect(JSON.parse(call[1].body)).toEqual({ device_id: 'dev_bureau_0001', permissions: ['view_screen', 'control_keyboard'] })
+  })
+
+  it('pendant l\'attente de l\'acceptation, un indicateur animé apparaît sur la ligne de l\'appareil, pas dans un message séparé', async () => {
+    const fetchMock = await render()
+    fetchMock.mockImplementation(async (url) => {
+      if (url === '/api/remote/status') return new Response(JSON.stringify({ agent_installed: true, turn_configured: false }))
+      if (url === '/api/remote/devices') return new Response(JSON.stringify({ devices: DEVICES }))
+      return new Promise(() => {})        // la création de session reste en attente : l'appareil n'a pas encore répondu
+    })
+    await act(async () => host.querySelector('li button[aria-label^="Se connecter"]').click())
+    const status = host.querySelector('li [role="status"]')
+    expect(status.textContent).toContain('Acceptation sur l\'appareil')
+    expect(status.querySelector('.animate-spin')).not.toBeNull()
+    expect(host.querySelectorAll('[role="status"]')).toHaveLength(1)
   })
 
   it('appaire avec le code à 6 chiffres, en ignorant tout ce qui n\'est pas un chiffre', async () => {
