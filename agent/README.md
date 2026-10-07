@@ -15,6 +15,28 @@ Pour contrôler un PC situé ailleurs (autre réseau, autre ville), déploie le 
 fenêtre de l'agent, saisis son adresse (`https://ton-domaine`) et la clé des agents. L'agent s'y connecte de lui-même : aucun port à ouvrir sur ce PC.
 Sur un même réseau, l'adresse du backend de PC Assistant (`192.168.1.20:8000`) suffit.
 
+## Installer en une commande (Windows)
+Sur le PC à contrôler, dans PowerShell, sans compiler ni copier de fichier :
+```powershell
+irm https://raw.githubusercontent.com/patgarcia66240-cmd/aria-remote/main/agent/install-agent.ps1 | iex
+```
+Le script télécharge la dernière version, **vérifie son empreinte SHA-256**, l'installe dans `%LOCALAPPDATA%\ARIA Remote` (sans droits administrateur), crée un raccourci dans le menu Démarrer et lance l'agent. Rien ne tourne en arrière-plan.
+
+Avec des options (télécharge d'abord le script, ou utilise la forme ci-dessous) :
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/patgarcia66240-cmd/aria-remote/main/agent/install-agent.ps1))) -Desktop -Autostart
+```
+| Option | Effet |
+|---|---|
+| `-Version 1.5.0` | installe une version précise (sinon la dernière) |
+| `-Desktop` / `-Autostart` | raccourci sur le Bureau / ouverture de l'agent à l'ouverture de session |
+| `-Server` `-ApiKey` `-Name` `-Allow` | pré-remplissent l'agent (retenus ensuite) ; la clé peut aussi être saisie dans la fenêtre |
+| `-NoLaunch` | installe sans lancer |
+| `-Check` | indique seulement la dernière version |
+| `-Uninstall` (`-Purge`) | retire le programme et les raccourcis (`-Purge` : aussi l'identité de l'appareil, qu'il faudra réappairer) |
+
+Réexécuter le script **met à jour** l'agent. Par prudence, tu peux lire le script avant de l'exécuter : il tient en un fichier, `agent/install-agent.ps1`.
+
 ## Lancer en une commande
 
 ```powershell
