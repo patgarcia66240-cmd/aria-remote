@@ -4,30 +4,58 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ARIA Remote</title>
-<style>
-  :root { --bg:#14171f; --panel:#1c212c; --line:#2f384a; --text:#e8ecf4; --muted:#8d99b0; --accent:#3b82f6; }
-  * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
-  main { min-height: 100%; display: grid; place-items: center; padding: 24px; }
-  .card { max-width: 460px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 28px; text-align: center; }
-  h1 { margin: 0 0 6px; font-size: 22px; }
-  p { margin: 6px 0 0; color: var(--muted); }
-  .ver { display: inline-block; margin-top: 14px; padding: 2px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; color: #60a5fa; background: rgba(59,130,246,.14); border: 1px solid rgba(59,130,246,.35); }
-</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
+<header>
+  <svg class="mark" viewBox="0 0 64 64" role="img" aria-label="Logo ARIA"><defs><linearGradient id="mb" x1="10" y1="6" x2="55" y2="59" gradientUnits="userSpaceOnUse"><stop stop-color="#3B82F6"/><stop offset="1" stop-color="#06B6D4"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="url(#mb)"/><path d="M15 34c5-13 13-19 17-19s12 6 17 19c-5 13-13 19-17 19S20 47 15 34Z" fill="#0F2B5C" fill-opacity=".45"/><circle cx="32" cy="34" r="8" fill="#E0F2FE"/><circle cx="32" cy="34" r="3.5" fill="#0F2B5C"/></svg>
+  <div class="id"><h1>ARIA Remote <span class="ver" id="ver" hidden></span></h1><small>Contrôler un PC à distance</small></div>
+  <span class="spacer"></span>
+  <span class="pill" id="pill" hidden><span class="dot"></span><span id="pill-text"></span></span>
+  <button class="icon" id="open-settings" title="Réglages" aria-label="Réglages" hidden>
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+  </button>
+</header>
+
 <main>
-  <div class="card">
-    <h1>ARIA Remote</h1>
-    <p>Application de contrôle à distance.</p>
-    <p>Squelette prêt : appareils, appairage et écran distant arrivent ensuite.</p>
-    <span class="ver" id="ver" hidden></span>
+  <!-- Connexion au serveur de rendez-vous -->
+  <section class="card narrow" id="setup" hidden>
+    <h2>Connexion au serveur</h2>
+    <p class="hint">Saisis l'adresse de ton serveur de rendez-vous et la <b>clé du contrôleur</b>. Elles sont retenues sur ce PC : tu ne les saisiras qu'une fois.</p>
+    <label class="field">Adresse du serveur
+      <input type="text" id="srv" placeholder="rendezvous.exemple.fr" autocomplete="off" spellcheck="false">
+    </label>
+    <label class="field">Clé du contrôleur <span class="opt" id="key-opt"></span>
+      <input type="password" id="key" placeholder="RENDEZVOUS_CONTROLLER_KEY" autocomplete="off">
+    </label>
+    <div class="err" id="setup-err" role="alert" hidden></div>
+    <div class="actions">
+      <button class="ghost" id="cancel-settings" hidden>Annuler</button>
+      <button id="save" class="grow">Se connecter</button>
+    </div>
+  </section>
+
+  <!-- Appareils et appairage -->
+  <div class="grid" id="home" hidden>
+    <section class="card" aria-labelledby="dev-title">
+      <h2 id="dev-title">Appareils</h2>
+      <div class="err" id="list-err" role="alert" hidden></div>
+      <ul class="devices" id="devices"></ul>
+      <p class="empty" id="empty" hidden>Aucun appareil pour l'instant. Lance l'agent sur le PC à contrôler (télécharge-le sur processxen.com), puis saisis ici le code à 6 chiffres qu'il affiche.</p>
+    </section>
+
+    <section class="card" aria-labelledby="pair-title">
+      <h2 id="pair-title">Ajouter un appareil</h2>
+      <p class="hint">Saisis le code d'appairage affiché par l'agent sur l'autre PC.</p>
+      <form id="pair-form" autocomplete="off">
+        <input type="text" id="code" inputmode="numeric" maxlength="12" placeholder="000 000" aria-label="Code d'appairage à 6 chiffres" spellcheck="false">
+        <button id="pair-btn" disabled>Appairer</button>
+      </form>
+      <div class="err" id="pair-err" role="alert" hidden></div>
+      <div class="ok" id="pair-ok" role="status" hidden></div>
+    </section>
   </div>
 </main>
-<script>
-  // Hors de la fenêtre Tauri (aperçu dans un navigateur), l'API n'existe pas : on n'affiche simplement pas la version.
-  const invoke = window.__TAURI__?.core?.invoke
-  if (invoke) invoke('app_version').then((v) => { const el = document.getElementById('ver'); el.textContent = 'v' + v; el.hidden = false }).catch(() => {})
-</script>
+<script src="app.js"></script>
 </body>
 </html>
