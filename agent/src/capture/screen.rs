@@ -109,14 +109,21 @@ pub fn default_screens() -> Screens {
     }
     #[cfg(not(windows))]
     {
-        Screens {
-            list: Arc::new(synthetic_screens),
-            open: Arc::new(|index| {
-                let screens = synthetic_screens();
-                let Some(screen) = screens.get(index) else { bail!("écran {index} introuvable") };
-                Ok(Box::new(SyntheticScreen::new(screen.width, screen.height)) as Box<dyn ScreenSource>)
-            }),
-        }
+        synthetic_backend()
+    }
+}
+
+/// Les deux écrans de test comme « machine » complète (liste + ouverture). Les tests s'en servent TOUJOURS, jamais des vrais écrans :
+/// sous Windows, `default_screens` liste ceux de la machine (un seul, souvent, sur un serveur d'intégration).
+#[cfg_attr(windows, allow(dead_code))]
+pub fn synthetic_backend() -> Screens {
+    Screens {
+        list: Arc::new(synthetic_screens),
+        open: Arc::new(|index| {
+            let screens = synthetic_screens();
+            let Some(screen) = screens.get(index) else { bail!("écran {index} introuvable") };
+            Ok(Box::new(SyntheticScreen::new(screen.width, screen.height)) as Box<dyn ScreenSource>)
+        }),
     }
 }
 

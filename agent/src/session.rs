@@ -323,14 +323,14 @@ fn start_frames(channel: Arc<RTCDataChannel>, session: Arc<Session>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capture::screen::{default_screens, synthetic_screens};
+    use crate::capture::screen::{synthetic_backend, synthetic_screens};
     use crate::clipboard::MemoryClipboard;
     use crate::input::LogInput;
 
     fn session(permissions: &[Permission], clipboard: Option<&str>) -> (Arc<Session>, SharedClipboard) {
         let input: SharedInput = Arc::new(Mutex::new(Box::new(LogInput::new())));
         let clip: SharedClipboard = Arc::new(Mutex::new(Box::new(MemoryClipboard(clipboard.map(String::from)))));
-        (Session::new(permissions.iter().copied().collect(), input, default_screens(), clip.clone()), clip)
+        (Session::new(permissions.iter().copied().collect(), input, synthetic_backend(), clip.clone()), clip)
     }
 
     const VIEW: [Permission; 1] = [Permission::ViewScreen];
@@ -400,7 +400,7 @@ mod tests {
         let none: Session = {
             let input: SharedInput = Arc::new(Mutex::new(Box::new(LogInput::new())));
             let clip: SharedClipboard = Arc::new(Mutex::new(Box::new(MemoryClipboard(None))));
-            Arc::try_unwrap(Session::new(HashSet::new(), input, default_screens(), clip)).ok().unwrap()
+            Arc::try_unwrap(Session::new(HashSet::new(), input, synthetic_backend(), clip)).ok().unwrap()
         };
         for text in [r#"{"t":"stream","fps":5}"#, r#"{"t":"screen","index":1}"#, r#"{"t":"clip","text":"x"}"#] {
             assert_eq!(run(&none, text), vec![json!({"t": "denied", "reason": "permission refusée"})], "{text}");
@@ -446,8 +446,8 @@ mod tests {
     #[test]
     fn the_synthetic_screens_are_the_two_test_screens() {
         assert_eq!(synthetic_screens().len(), 2);
-        assert_eq!((default_screens().list)().len(), 2);
-        assert_eq!(default_screens().primary(), 0);
-        assert!((default_screens().open)(1).is_ok() && (default_screens().open)(2).is_err());
+        assert_eq!((synthetic_backend().list)().len(), 2);
+        assert_eq!(synthetic_backend().primary(), 0);
+        assert!((synthetic_backend().open)(1).is_ok() && (synthetic_backend().open)(2).is_err());
     }
 }
