@@ -1,0 +1,6 @@
+**/__pycache__
+**/node_modules
+agent/target
+desktop/gen
+desktop/node_modules
+desktop/target
