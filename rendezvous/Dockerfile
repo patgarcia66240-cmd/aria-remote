@@ -18,7 +18,7 @@ RUN useradd --create-home --uid 10002 rendezvous && mkdir -p /app/backend/data &
 USER rendezvous
 VOLUME ["/app/backend/data"]
 
-# Port : 8080 par défaut ; les hébergeurs comme Render imposent le leur dans la variable PORT.
+# Port : 8080 par défaut ; certains hébergeurs imposent le leur dans la variable PORT.
 ENV PORT=8080
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s \

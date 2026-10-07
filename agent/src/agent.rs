@@ -230,13 +230,13 @@ impl Agent {
 
     async fn connection(&mut self, mut socket: Socket, lines: &mut mpsc::UnboundedReceiver<String>) -> Result<Outcome> {
         // 1. Défi : prouver qu'on détient la clé privée de l'appareil. Un appareil pas encore appairé est refusé avant même le défi.
-        // Derrière certains relais (Render), la fermeture « appareil inconnu » met ~20 s à arriver : sans réponse en 8 s on demande déjà un code
+        // Derrière certains relais HTTPS, la fermeture « appareil inconnu » met ~20 s à arriver : sans réponse en 8 s on demande déjà un code
         // (sans risque : demander un code à un appareil déjà appairé ne le désappaire pas).
         let first = tokio::time::timeout(Duration::from_secs(8), signaling::receive(&mut socket)).await.unwrap_or(None);
         let nonce = match first {
             Some(Ok(ServerMessage::Challenge { nonce })) => nonce,
             None => return Ok(Outcome::NotPaired),
-            // Derrière un relais HTTPS (Render, Cloudflare…), la fermeture « appareil inconnu » du serveur arrive parfois comme une coupure
+            // Derrière un relais HTTPS (Cloudflare, proxy…), la fermeture « appareil inconnu » du serveur arrive parfois comme une coupure
             // sèche au lieu d'une trame de fermeture : même sens, on demande un code. Si le serveur est vraiment en panne, l'inscription échoue
             // et l'erreur s'affiche.
             Some(Err(_)) => return Ok(Outcome::NotPaired),

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Vérifie un serveur de rendez-vous déployé (Render, VPS…) : HTTPS, clés, canal WebSocket des agents, serveurs STUN/TURN.
+"""Vérifie un serveur de rendez-vous déployé (VPS…) : HTTPS, clés, canal WebSocket des agents, serveurs STUN/TURN.
 
-    python check_server.py https://pc-assistant-rendezvous.onrender.com
+    python check_server.py https://rendezvous.exemple.fr
     (les clés sont lues dans RENDEZVOUS_AGENT_KEY et RENDEZVOUS_CONTROLLER_KEY, ou demandées ; elles ne sont jamais affichées)
 
 Ne modifie rien sur le serveur : il ne fait que lire (et tenter, sans succès attendu, des accès qui doivent être REFUSÉS). Aucune dépendance : bibliothèque
@@ -21,7 +21,7 @@ import urllib.error
 import urllib.request
 from urllib.parse import urlparse
 
-WAKE_TIMEOUT = 120      # une offre gratuite qui dormait peut mettre une à deux minutes à se réveiller
+WAKE_TIMEOUT = 120      # un serveur qui démarre peut mettre jusqu'à deux minutes à répondre
 results: list[tuple[bool, str]] = []
 
 
@@ -109,7 +109,7 @@ def main() -> int:
     stun = any(any(u.startswith("stun:") for u in s["urls"]) for s in servers)
     turn = any("username" in s for s in servers)
     check(stun, "STUN configuré (traversée de la plupart des box domestiques)")
-    print(f"  {'OK ' if turn else 'info'}  TURN {'configuré' if turn else 'non configuré : certains réseaux stricts ne pourront pas se connecter (normal sur Render)'}")
+    print(f"  {'OK ' if turn else 'info'}  TURN {'configuré' if turn else 'non configuré : certains réseaux stricts ne pourront pas se connecter'}")
 
     failures = [text for ok, text in results if not ok]
     print(f"\n{'Tout est conforme.' if not failures else str(len(failures)) + ' point(s) à corriger.'}")

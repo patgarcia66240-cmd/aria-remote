@@ -57,39 +57,24 @@ Le modèle « Ubuntu 24.04 with n8n » utilise **Traefik sur les ports 80 et 443
 Ports : `3478` (TCP et UDP) et `49152–65535` (UDP) servent au relais. Ils doivent être joignables depuis Internet. Si tu actives un jour le pare-feu
 Hostinger, ouvre-les, avec 80 et 443 (déjà utilisés par Traefik) et 22 (SSH).
 
-Contrairement à la variante Render gratuite, les appareils appairés **sont conservés** (volume Docker) et le service ne s'endort pas.
-
-## Variante sans serveur à louer : Render
-
-Le dépôt contient un `render.yaml` à la racine : sur [Render](https://render.com), **New › Blueprint**, choisis ce dépôt (et la branche indiquée dans le
-fichier), puis valide. Render construit l'image, fournit le **HTTPS** (`https://pc-assistant-rendezvous.onrender.com` ou similaire) et **génère deux
-clés différentes**. Lis-les dans le service, onglet **Environment** : `RENDEZVOUS_AGENT_KEY` (pour les agents) et `RENDEZVOUS_CONTROLLER_KEY` (pour
-`backend/.env`, voir ci-dessous). Vérifie : `https://<ton-service>.onrender.com/health` répond `{"status":"ok"}`.
-
-Ce que Render ne fait pas, et ce que ça change :
-
-| Limite | Conséquence | Que faire |
-| --- | --- | --- |
-| Pas de ports UDP, donc **pas de coturn** | Les connexions qui exigent un relais (certains réseaux d'entreprise, 4G stricte) échouent ; la plupart des réseaux domestiques passent grâce au STUN | Renseigner un service TURN externe : `REMOTE_TURN_URLS`, `REMOTE_TURN_USERNAME`, `REMOTE_TURN_CREDENTIAL` (variables du service) |
-| Offre **gratuite** : le service s'endort sans trafic | La première requête après un temps d'inactivité attend le réveil (plusieurs dizaines de secondes) ; les agents se reconnectent seuls | Offre payante « Starter » pour un service permanent |
-| Offre gratuite : **disque effacé** à chaque redémarrage | Les appareils appairés sont oubliés : l'agent affiche un nouveau code et il faut le ressaisir | Offre payante avec disque persistant monté sur `/app/backend/data` |
+Les appareils appairés **sont conservés** (volume Docker) et le service ne s'endort pas.
 
 **Vercel ne convient pas** : ses fonctions sont sans état et de courte durée, alors que ce serveur garde des connexions WebSocket ouvertes (les agents) et
 un état en mémoire (codes, sessions).
 
-## Vérifier un déploiement (Render, VPS…)
+## Vérifier un déploiement
 
 ```bash
-python remote-rendezvous/check_server.py https://pc-assistant-rendezvous.onrender.com
+python remote-rendezvous/check_server.py https://rendezvous.exemple.fr
 ```
 
 L'outil lit les clés dans `RENDEZVOUS_AGENT_KEY` et `RENDEZVOUS_CONTROLLER_KEY` (ou les demande, sans les afficher) et vérifie : réponse de `/health` (il
-attend jusqu'à deux minutes le réveil d'une offre gratuite), HTTPS, absence de documentation publique, **refus** sans clé et avec une mauvaise clé,
+attend jusqu'à deux minutes que le serveur réponde), HTTPS, absence de documentation publique, **refus** sans clé et avec une mauvaise clé,
 **séparation des rôles** (la clé des agents ne liste rien, celle du contrôleur est refusée sur le canal des agents), ouverture du WebSocket des agents, et
 serveurs STUN/TURN fournis. Il ne modifie rien. Python suffit, sans dépendance ; à relancer à chaque changement de serveur.
 
 **Essai de bout en bout** (dans cet ordre) :
-1. `check_server.py` répond « Tout est conforme » (seul le TURN peut rester « non configuré » sur Render).
+1. `check_server.py` répond « Tout est conforme » (le TURN doit être « configuré » si le relais coturn est installé).
 2. Sur le PC de contrôle : `backend/.env` avec `REMOTE_RENDEZVOUS_URL` et `REMOTE_RENDEZVOUS_KEY`, redémarrer le backend ; l'onglet Maintenance à distance
    affiche « Accès par Internet via le serveur de rendez-vous ».
 3. Sur l'autre PC : l'agent, adresse du serveur + clé des agents ; un code à 6 chiffres s'affiche dans sa fenêtre.

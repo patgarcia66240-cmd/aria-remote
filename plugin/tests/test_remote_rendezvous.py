@@ -202,7 +202,7 @@ def test_chat_works_through_the_rendezvous_server(relay):
 # -- image du serveur : dépendances ---------------------------------------------------------------------------------------------
 def test_every_third_party_import_of_the_image_is_in_the_rendezvous_requirements():
     """Le Dockerfile n'embarque qu'une partie du backend avec une liste de dépendances réduite : un import oublié ne se voit qu'au déploiement
-    (c'est arrivé : « No module named 'httpx' » sur Render). Le routeur et ses modules importent ce qui est listé ici."""
+    (c'est arrivé : « No module named 'httpx' » au premier déploiement). Le routeur et ses modules importent ce qui est listé ici."""
     import ast
     import sys
 
