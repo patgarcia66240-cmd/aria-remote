@@ -1,0 +1,72 @@
+# Compile l'agent Remote pour Windows et publie remote-agent.exe.
+#   - À chaque changement de remote-agent/ : tests + compilation sous Windows (l'exe est gardé 30 jours comme « artefact » de l'exécution).
+#   - Avec une étiquette « agent-vX.Y.Z » (git tag agent-v0.1.0 && git push origin agent-v0.1.0) : l'exe et son empreinte SHA-256 sont
+#     joints à une version (Release) du dépôt, d'où la page de téléchargement les récupère.
+#   - À la main : onglet Actions › « Agent Windows » › Run workflow.
+name: Agent Windows
+
+on:
+  push:
+    branches: [chore/frontend-audit-p1, main]
+    paths: ['remote-agent/**', '.github/workflows/build-agent.yml']
+    tags: ['agent-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: remote-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: remote-agent
+
+      # Les tests tournent AUSSI sous Windows : c'est là que la vraie saisie (enigo), la capture (xcap) et la boîte de dialogue (rfd) sont compilées.
+      - name: Tests
+        run: cargo test --locked
+
+      - name: Compilation (release)
+        run: cargo build --release --locked
+
+      - name: Empreinte SHA-256
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash target/release/remote-agent.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  remote-agent.exe" | Out-File -Encoding ascii target/release/remote-agent.exe.sha256
+          Write-Host "SHA-256 : $hash"
+          "### remote-agent.exe`nSHA-256 : ``$hash``" | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: remote-agent-windows
+          path: |
+            remote-agent/target/release/remote-agent.exe
+            remote-agent/target/release/remote-agent.exe.sha256
+          retention-days: 30
+          if-no-files-found: error
+
+  release:
+    # Seulement pour une étiquette agent-v* : l'exe compilé plus haut devient téléchargeable depuis la version du dépôt.
+    if: startsWith(github.ref, 'refs/tags/agent-v')
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: remote-agent-windows
+      - name: Publier la version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" remote-agent.exe remote-agent.exe.sha256 \
+            --repo "${GITHUB_REPOSITORY}" --title "Agent Remote ${GITHUB_REF_NAME#agent-v}" \
+            --notes "Agent Remote pour Windows 64 bits. Empreinte SHA-256 dans remote-agent.exe.sha256." --verify-tag
