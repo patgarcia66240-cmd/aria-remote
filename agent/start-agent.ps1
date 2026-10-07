@@ -16,7 +16,8 @@
 #   .\start-agent.ps1 -Server 192.168.1.20:8000 -ApiKey <cle>   # pour (re)definir l'adresse et la cle
 #   .\start-agent.ps1 -Allow "mouse,keyboard"           # autoriser souris et clavier (retenu ; modifiable dans la fenetre)
 #   .\start-agent.ps1 -Name "PC du salon"                # nom affiche dans PC Assistant
-#   .\start-agent.ps1 -Dev                               # compilation plus rapide (sans exe)
+#   .\start-agent.ps1 -Local                             # meme reseau : utilise la cle API_AUTH_TOKEN de backend\.env
+#   .\start-agent.ps1 -Dev                            # compilation plus rapide (sans exe)
 
 param(
     [string]$Server = "",
@@ -24,15 +25,17 @@ param(
     [string]$Allow = "",
     [string]$Name = "",
     [switch]$Dev,
-    [switch]$AutoAccept
+    [switch]$AutoAccept,
+    [switch]$Local      # backend de PC Assistant sur ce PC / ce reseau : reprend API_AUTH_TOKEN de backend\.env
 )
 
 $ErrorActionPreference = "Stop"
 $agentDir = $PSScriptRoot
 $root = Split-Path -Parent $agentDir
 
-# --- Cle d'API : parametre, sinon backend\.env s'il existe (PC de PC Assistant) ; sinon l'agent la demande et la retient ---
-if (-not $ApiKey) {
+# --- Cle d'API : parametre ; avec -Local (meme reseau, backend de ce PC), sinon API_AUTH_TOKEN de backend\.env. Jamais sans -Local : cette cle ecraserait
+# --- celle du serveur de rendez-vous deja retenue et provoquerait des 403. Sinon l'agent la demande dans sa fenetre et la retient. ---
+if ($Local -and -not $ApiKey) {
     $envFile = Join-Path $root "backend\.env"
     if (Test-Path $envFile) {
         foreach ($line in Get-Content $envFile) {
