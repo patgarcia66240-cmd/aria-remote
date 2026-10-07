@@ -35,6 +35,7 @@ pub fn label(os: &str, kind: Kind) -> String {
     }
 }
 
+#[cfg_attr(not(windows), allow(dead_code))]
 /// Sortie de la commande PowerShell de Windows : « 9,10|1 » = types de châssis | nombre de batteries.
 pub fn parse_windows(output: &str) -> (Vec<u32>, bool) {
     let line = output.lines().map(str::trim).find(|l| l.contains('|')).unwrap_or("");

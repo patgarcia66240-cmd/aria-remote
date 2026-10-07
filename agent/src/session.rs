@@ -7,29 +7,38 @@
 //!     stream{fps?, quality?, width?} : réglages de l'image (vue de l'écran) ;
 //!     screen{index}               : écran à afficher et à piloter (vue de l'écran) ;
 //!     clip{text}                  : texte à mettre dans le presse-papiers de l'appareil (permission clavier).
-//!   agent -> contrôleur : info{width, height, permissions, screens, screen, features}, cursor{x, y}, pong{id}, clip{text}, denied{reason}.
+//!   agent -> contrôleur : info{width, height, permissions, screens, screen, features}, cursor{x, y}, pong{id}, clip{text}, denied{reason},
+//!     stats{fps, kbps, capture_ms, encode_ms, dropped, idle} toutes les 2 s (voir pipeline.rs).
+//! Canaux : « frames » (images JPEG découpées, le contrôleur le crée non ordonné à fiabilité partielle : une image perdue ne retarde pas la suivante),
+//!   « control » (fiable et ordonné) et « pointer » (non fiable : seulement les déplacements de souris, la dernière position suffit).
 
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 use serde_json::{json, Value};
-use tokio::sync::mpsc;
 use webrtc::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::data_channel::RTCDataChannel;
 
-use crate::capture::screen::{encode_jpeg, JPEG_QUALITY, MAX_WIDTH};
-use crate::capture::{Screen, Screens};
+use crate::capture::screen::{JpegEncoder, JPEG_QUALITY, MAX_WIDTH};
+use crate::capture::{Frame, Screen, Screens};
 use crate::clipboard::{self, Clipboard};
 use crate::input::{self, Area, Control, InputSink, Permission};
-use crate::network::webrtc::{chunk_frame, MAX_BUFFERED};
+use crate::network::webrtc::chunk_frame;
+use crate::pipeline::{fingerprint, Counters, Governor, Slot};
 
 const CURSOR_HZ: u64 = 20;
 const CLIPBOARD_POLL: Duration = Duration::from_secs(1);
 
 /// Ce que cet agent sait faire, annoncé au contrôleur dans « info » : un contrôleur n'utilise que ce qui est listé (les anciens agents n'ont pas la liste).
-pub const FEATURES: [&str; 4] = ["ping", "stream", "screens", "clipboard"];
+pub const FEATURES: [&str; 6] = ["ping", "stream", "screens", "clipboard", "pointer", "stats"];
+
+/// Un écran qui ne change pas n'est pas renvoyé… sauf toutes les 1,5 s : une image perdue en route (canal à fiabilité partielle) est ainsi
+/// toujours remplacée, même devant un écran fixe.
+const HEARTBEAT: Duration = Duration::from_millis(1500);
+const STATS_EVERY: Duration = Duration::from_secs(2);
 
 pub type SharedInput = Arc<Mutex<Box<dyn InputSink>>>;
 pub type SharedClipboard = Arc<Mutex<Box<dyn Clipboard>>>;
@@ -81,13 +90,17 @@ pub struct Session {
     clipboard: SharedClipboard,
     stream: Mutex<StreamSettings>,
     sync: Mutex<clipboard::Sync>,
+    control: Mutex<Option<Arc<RTCDataChannel>>>,
+    /// Passe à vrai dès que le contrôleur emploie un message récent (ping, stream, screen) : il comprend alors « stats ». Un contrôleur plus ancien
+    /// (l'onglet d'ARIA, par exemple) prendrait ce message pour les informations de l'écran et fausserait son affichage : il n'en reçoit donc pas.
+    stats_wanted: AtomicBool,
 }
 
 impl Session {
     pub fn new(permissions: HashSet<Permission>, input: SharedInput, screens: Screens, clipboard: SharedClipboard) -> Arc<Self> {
         let primary = screens.primary();
         let initial = clipboard.lock().ok().and_then(|mut c| c.get_text());
-        let session = Arc::new(Self { permissions, input, screens, clipboard, stream: Mutex::new(StreamSettings::initial(primary)), sync: Mutex::new(clipboard::Sync::new(initial)) });
+        let session = Arc::new(Self { permissions, input, screens, clipboard, stream: Mutex::new(StreamSettings::initial(primary)), sync: Mutex::new(clipboard::Sync::new(initial)), control: Mutex::new(None), stats_wanted: AtomicBool::new(false) });
         session.point_input_at(primary);
         session
     }
@@ -118,6 +131,21 @@ impl Session {
         json!({"t": "info", "width": width, "height": height, "permissions": names, "screens": screens, "screen": selected, "features": features})
     }
 
+    /// Canal « pointer » : seuls les déplacements de souris y sont acceptés (un clic ou une touche doit passer par le canal fiable « control »).
+    pub fn process_pointer(&self, data: &[u8]) {
+        if matches!(serde_json::from_slice::<Control>(data), Ok(Control::Move { .. })) {
+            let _ = self.process(data);
+        }
+    }
+
+    /// Envoie un message JSON au contrôleur sur le canal « control » (s'il est ouvert).
+    async fn send_control(&self, value: Value) {
+        let channel = self.control.lock().ok().and_then(|c| c.clone());
+        if let Some(channel) = channel {
+            let _ = channel.send_text(value.to_string()).await;
+        }
+    }
+
     /// Traite un message du canal « control » et renvoie les réponses à envoyer. Aucune entrée/sortie réseau ici : tout est testable.
     pub fn process(&self, data: &[u8]) -> Vec<Value> {
         let denied = |reason: &str| vec![json!({"t": "denied", "reason": reason})];
@@ -131,6 +159,9 @@ impl Session {
             };
         }
         let Ok(message) = serde_json::from_slice::<Message>(data) else { return denied("commande illisible") };
+        if matches!(message, Message::Ping { .. } | Message::Stream { .. } | Message::Screen { .. }) {
+            self.stats_wanted.store(true, Ordering::Relaxed);
+        }
         match message {
             Message::Ping { id } => vec![json!({"t": "pong", "id": id})],
             Message::Stream { fps, quality, width } => {
@@ -200,6 +231,10 @@ pub fn attach_channel(channel: Arc<RTCDataChannel>, session: Arc<Session>) {
             }
         }
         "control" => attach_control(channel, session),
+        "pointer" => channel.on_message(Box::new(move |message: DataChannelMessage| {
+            session.process_pointer(&message.data);
+            Box::pin(async {})
+        })),
         other => eprintln!("[session] canal inconnu ignoré : {other}"),
     }
 }
@@ -211,6 +246,9 @@ fn attach_control(channel: Arc<RTCDataChannel>, session: Arc<Session>) {
         let channel = open_channel.clone();
         let session = open_session.clone();
         Box::pin(async move {
+            if let Ok(mut holder) = session.control.lock() {
+                *holder = Some(channel.clone());
+            }
             let _ = channel.send_text(session.info().to_string()).await;
             tokio::spawn(share_cursor(channel.clone(), session.clone()));
             if session.permissions.contains(&Permission::ControlKeyboard) {
@@ -263,60 +301,134 @@ async fn share_clipboard(channel: Arc<RTCDataChannel>, session: Arc<Session>) {
     }
 }
 
-/// Capture dans un thread dédié (la source d'écran y est créée et y reste), envoi asynchrone avec contrôle de saturation.
-/// Les réglages (images par seconde, qualité, largeur, écran) sont relus à chaque image : un changement s'applique tout de suite.
+/// Flux d'images en trois étapes qui tournent en parallèle, reliées par des boîtes aux lettres « dernière valeur » :
+///   capture (thread) -> encodage (thread) -> envoi (tâche tokio).
+/// Une étape lente ne fait jamais grossir de file : la suivante prend toujours l'image la plus récente. On n'encode ni n'envoie un écran qui n'a pas
+/// changé, et on s'arrête de capturer quand le canal d'envoi est saturé (inutile d'encoder des images qu'on jettera). Les réglages (images par
+/// seconde, qualité, largeur, écran) sont relus à chaque image : un changement s'applique tout de suite.
 fn start_frames(channel: Arc<RTCDataChannel>, session: Arc<Session>) {
-    let (frames, mut ready) = mpsc::channel::<Vec<u8>>(2);
-    std::thread::spawn(move || {
-        let mut current = session.settings().screen;
-        let mut screen = match (session.screens.open)(current) {
-            Ok(screen) => screen,
-            Err(error) => {
-                eprintln!("[capture] écran indisponible : {error:#}");
-                return;
-            }
-        };
-        loop {
-            let started = Instant::now();
-            let settings = session.settings();
-            if settings.screen != current {
-                match (session.screens.open)(settings.screen) {
-                    Ok(next) => { screen = next; current = settings.screen; }
-                    Err(error) => {
-                        eprintln!("[capture] changement d'écran impossible : {error:#}");
-                        if let Ok(mut stream) = session.stream.lock() { stream.screen = current; }   // on reste sur l'écran qui marche
-                    }
-                }
-            }
-            match screen.capture().and_then(|frame| encode_jpeg(frame, settings.width, settings.quality)) {
-                Ok(jpeg) => {
-                    if frames.blocking_send(jpeg).is_err() {
-                        break;      // la session est terminée : plus personne pour recevoir
-                    }
-                }
+    let raw: Arc<Slot<Frame>> = Slot::new();
+    let jpegs: Arc<Slot<Vec<u8>>> = Slot::new();
+    let counters = Arc::new(Counters::default());
+    let pressure = Arc::new(AtomicBool::new(false));
+
+    // 1. Capture : la source d'écran est créée dans ce thread et y reste.
+    {
+        let (raw, counters, pressure, session) = (raw.clone(), counters.clone(), pressure.clone(), session.clone());
+        std::thread::spawn(move || {
+            let mut current = session.settings().screen;
+            let mut screen = match (session.screens.open)(current) {
+                Ok(screen) => screen,
                 Err(error) => {
-                    eprintln!("[capture] {error:#}");
-                    std::thread::sleep(Duration::from_secs(1));
-                }
-            }
-            if let Some(rest) = Duration::from_millis(1000 / u64::from(settings.fps.max(1))).checked_sub(started.elapsed()) {
-                std::thread::sleep(rest);
-            }
-        }
-    });
-    tokio::spawn(async move {
-        let mut frame_id = 0u32;
-        while let Some(jpeg) = ready.recv().await {
-            if channel.buffered_amount().await > MAX_BUFFERED {
-                continue;
-            }
-            for chunk in chunk_frame(frame_id, &jpeg) {
-                if channel.send(&chunk).await.is_err() {
+                    eprintln!("[capture] écran indisponible : {error:#}");
+                    raw.close();
                     return;
                 }
+            };
+            let mut last: Option<(u64, u32, u32)> = None;
+            let mut last_sent = Instant::now();
+            while !raw.is_closed() {
+                let started = Instant::now();
+                let settings = session.settings();
+                if settings.screen != current {
+                    match (session.screens.open)(settings.screen) {
+                        Ok(next) => { screen = next; current = settings.screen; last = None; }
+                        Err(error) => {
+                            eprintln!("[capture] changement d'écran impossible : {error:#}");
+                            if let Ok(mut stream) = session.stream.lock() { stream.screen = current; }   // on reste sur l'écran qui marche
+                        }
+                    }
+                }
+                if pressure.load(Ordering::Relaxed) {
+                    Counters::add(&counters.throttled, 1);        // canal saturé : on ne capture pas pour jeter
+                } else {
+                    match screen.capture() {
+                        Ok(frame) => {
+                            Counters::add(&counters.captured, 1);
+                            Counters::add(&counters.capture_us, started.elapsed().as_micros() as u64);
+                            let print = (fingerprint(&frame.rgba), frame.width, frame.height);
+                            if last == Some(print) && last_sent.elapsed() < HEARTBEAT {
+                                Counters::add(&counters.unchanged, 1);
+                            } else {
+                                last = Some(print);
+                                last_sent = Instant::now();
+                                raw.put(frame);
+                            }
+                        }
+                        Err(error) => {
+                            eprintln!("[capture] {error:#}");
+                            std::thread::sleep(Duration::from_secs(1));
+                        }
+                    }
+                }
+                if let Some(rest) = Duration::from_millis(1000 / u64::from(settings.fps.max(1))).checked_sub(started.elapsed()) {
+                    std::thread::sleep(rest);
+                }
             }
-            frame_id = frame_id.wrapping_add(1);
+            raw.close();
+        });
+    }
+
+    // 2. Encodage : ne prend que la dernière image capturée.
+    {
+        let (raw, jpegs, counters, session) = (raw.clone(), jpegs.clone(), counters.clone(), session.clone());
+        std::thread::spawn(move || {
+            let mut encoder = JpegEncoder::new();
+            while let Some(frame) = raw.take_blocking() {
+                let settings = session.settings();
+                let started = Instant::now();
+                match encoder.encode(frame, settings.width, settings.quality) {
+                    Ok(jpeg) => {
+                        Counters::add(&counters.encode_us, started.elapsed().as_micros() as u64);
+                        Counters::add(&counters.encoded, 1);
+                        jpegs.put(jpeg);
+                    }
+                    Err(error) => eprintln!("[capture] {error:#}"),
+                }
+            }
+            jpegs.close();
+        });
+    }
+
+    // 3. Envoi : saute l'image si le canal est déjà chargé (le retard ne s'accumule jamais), et rapporte les mesures toutes les 2 s.
+    tokio::spawn(async move {
+        let mut governor = Governor::new();
+        let mut frame_id = 0u32;
+        let mut tick = tokio::time::interval(Duration::from_millis(100));
+        let mut window = Instant::now();
+        loop {
+            tokio::select! {
+                next = jpegs.take_async() => {
+                    let Some(jpeg) = next else { break };
+                    if channel.buffered_amount().await > governor.limit() {
+                        Counters::add(&counters.dropped, 1);
+                        pressure.store(true, Ordering::Relaxed);
+                        continue;
+                    }
+                    governor.observe(jpeg.len());
+                    let mut failed = false;
+                    for chunk in chunk_frame(frame_id, &jpeg) {
+                        if channel.send(&chunk).await.is_err() { failed = true; break; }
+                    }
+                    if failed { break; }
+                    frame_id = frame_id.wrapping_add(1);
+                    Counters::add(&counters.sent, 1);
+                    Counters::add(&counters.bytes, jpeg.len() as u64);
+                }
+                _ = tick.tick() => {
+                    // Indépendamment des images : la pression retombe dès que le canal se vide (sinon la capture, arrêtée, ne reprendrait jamais).
+                    pressure.store(channel.buffered_amount().await > governor.limit() / 2, Ordering::Relaxed);
+                    if window.elapsed() >= STATS_EVERY {
+                        let report = counters.report(window.elapsed().as_millis() as u64);
+                        window = Instant::now();
+                        if !session.stats_wanted.load(Ordering::Relaxed) { continue; }
+                        session.send_control(json!({"t": "stats", "fps": report.fps, "kbps": report.kbps, "capture_ms": report.capture_ms, "encode_ms": report.encode_ms, "dropped": report.dropped, "idle": report.idle})).await;
+                    }
+                }
+            }
         }
+        raw.close();
+        jpegs.close();
     });
 }
 
@@ -363,9 +475,9 @@ mod tests {
         assert_eq!((info["width"].as_u64(), info["height"].as_u64(), info["screen"].as_u64()), (Some(1280), Some(720), Some(0)));
         assert_eq!(info["screens"].as_array().unwrap().len(), 2);
         assert_eq!(info["screens"][1]["x"], 1280);
-        assert_eq!(info["features"], json!(["ping", "stream", "screens"]));
+        assert_eq!(info["features"], json!(["ping", "stream", "screens", "pointer", "stats"]));
         let (all, _) = session(&ALL, None);
-        assert_eq!(all.info()["features"], json!(["ping", "stream", "screens", "clipboard"]));
+        assert_eq!(all.info()["features"], json!(["ping", "stream", "screens", "clipboard", "pointer", "stats"]));
         assert_eq!(all.info()["permissions"], json!(["control_keyboard", "control_mouse", "view_screen"]));
     }
 
@@ -412,6 +524,20 @@ mod tests {
     }
 
     #[test]
+    fn stats_are_only_wanted_by_controllers_that_speak_the_recent_messages() {
+        let (view, _) = session(&VIEW, None);
+        assert!(!view.stats_wanted.load(Ordering::Relaxed), "un contrôleur qui n'a rien dit de récent ne reçoit pas de statistiques");
+        run(&view, r#"{"t":"move","x":0.5,"y":0.5}"#);
+        run(&view, "pas du json");
+        assert!(!view.stats_wanted.load(Ordering::Relaxed));
+        run(&view, r#"{"t":"ping","id":1}"#);
+        assert!(view.stats_wanted.load(Ordering::Relaxed));
+        let (other, _) = session(&VIEW, None);
+        run(&other, r#"{"t":"stream","fps":5}"#);
+        assert!(other.stats_wanted.load(Ordering::Relaxed));
+    }
+
+    #[test]
     fn stream_updates_apply_with_the_view_permission() {
         let (view, _) = session(&VIEW, None);
         assert!(run(&view, r#"{"t":"stream","fps":20,"quality":80}"#).is_empty());
@@ -441,6 +567,21 @@ mod tests {
         assert_eq!(run(&view, "pas du json"), vec![json!({"t": "denied", "reason": "commande illisible"})]);
         let (all, _) = session(&ALL, None);
         assert!(run(&all, r#"{"t":"move","x":0.5,"y":0.5}"#).is_empty());
+    }
+
+    #[test]
+    fn the_pointer_channel_only_moves_the_mouse_and_still_needs_the_permission() {
+        let (all, _) = session(&ALL, None);
+        all.process_pointer(br#"{"t":"move","x":0.5,"y":0.5}"#);
+        assert_eq!(all.cursor_position().map(|(x, _)| (x * 100.0).round()), Some(50.0));
+        all.process_pointer(br#"{"t":"down","x":0.9,"y":0.9,"button":0}"#);
+        all.process_pointer(br#"{"t":"key","down":true,"code":"KeyA","key":"a"}"#);
+        all.process_pointer(br#"{"t":"clip","text":"intrus"}"#);
+        all.process_pointer(b"pas du json");
+        assert_eq!(all.cursor_position().map(|(x, _)| (x * 100.0).round()), Some(50.0), "ni clic ni touche ne passent par ce canal non fiable");
+        let (view, _) = session(&VIEW, None);
+        view.process_pointer(br#"{"t":"move","x":0.9,"y":0.9}"#);
+        assert_eq!(view.cursor_position(), None, "sans la permission souris, rien ne bouge");
     }
 
     #[test]

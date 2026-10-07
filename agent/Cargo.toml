@@ -1,6 +1,6 @@
 [package]
 name = "remote-agent"
-version = "1.7.0"
+version = "1.8.0"
 edition = "2021"
 description = "Agent Remote de PC Assistant : capture écran, souris, clavier et WebRTC (voir docs/REMOTE_ARCHITECTURE.md)"
 license = "UNLICENSED"
@@ -17,7 +17,8 @@ dirs = "5"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 futures-util = "0.3"
 hex = "0.4"
-image = { version = "0.25", default-features = false, features = ["jpeg"] }
+fast_image_resize = "5"
+jpeg-encoder = { version = "0.6", features = ["simd"] }
 rand = "0.8"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
@@ -30,6 +31,7 @@ webrtc = "0.14"
 # Capture, saisie et fenêtre de consentement natives : Windows seulement (ailleurs, source synthétique et saisie journalisée,
 # ce qui permet de développer et tester sans écran).
 [dev-dependencies]
+image = { version = "0.25", default-features = false, features = ["jpeg"] }   # relit les JPEG produits (tests)
 tower = { version = "0.5", features = ["util"] }
 
 [target.'cfg(windows)'.dependencies]

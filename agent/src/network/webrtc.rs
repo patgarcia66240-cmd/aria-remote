@@ -21,11 +21,10 @@ use super::signaling::{ClientMessage, IceServerConfig};
 
 /// Taille d'un morceau d'image : bien en dessous de la limite d'un message WebRTC, quel que soit le navigateur.
 pub const CHUNK: usize = 16 * 1024;
-/// Au-delà, le canal est saturé (réseau lent) : on saute des images plutôt que d'accumuler du retard.
-pub const MAX_BUFFERED: usize = 1_000_000;
+// (La limite de ce qui peut attendre dans le canal d'envoi n'est plus fixe : voir `pipeline::Governor`.)
 
 /// Découpe un JPEG. En-tête de 8 octets, grand-boutiste : numéro d'image (u32), rang (u16), nombre de morceaux (u16) — même format que
-/// `FrameAssembler` dans frontend/src/components/remoteApi.js.
+/// `FrameAssembler` (ui/src/remoteApi.js, desktop/web/session.js).
 pub fn chunk_frame(frame_id: u32, jpeg: &[u8]) -> Vec<Bytes> {
     let count = jpeg.len().div_ceil(CHUNK);
     if count == 0 || count > usize::from(u16::MAX) {

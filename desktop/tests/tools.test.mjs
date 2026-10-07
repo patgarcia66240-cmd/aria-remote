@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { AutoQuality, CLIPBOARD_MAX_BYTES, ClipboardSync, FpsMeter, LatencyMeter, PRESETS, SHORTCUTS, latencyTone, screenLabel, shortcutMessages, streamMessage, stuckKeys } from '../web/tools.js'
+import { AutoQuality, CLIPBOARD_MAX_BYTES, ClipboardSync, FpsMeter, LatencyMeter, PRESETS, SHORTCUTS, latencyTone, screenLabel, shortcutMessages, statsTitle, streamMessage, stuckKeys } from '../web/tools.js'
 
 describe('qualité de l\'image', () => {
   it('les préréglages sont croissants et dans les bornes de l\'agent', () => {
@@ -36,10 +36,38 @@ describe('qualité de l\'image', () => {
     assert.equal(auto.preset, PRESETS.high)
   })
 
+  it('auto : des images abandonnées par l\'agent (réseau trop lent) font baisser la qualité même si la latence semble bonne', () => {
+    const auto = new AutoQuality('high')
+    assert.equal(auto.sample({ rtt: 40, fps: 15, dropped: 3 }), null)
+    assert.equal(auto.sample({ rtt: 40, fps: 15, dropped: 5 }), null)
+    assert.equal(auto.sample({ rtt: 40, fps: 15, dropped: 2 }), PRESETS.balanced)
+  })
+
+  it('auto : un écran fixe n\'est pas une connexion lente (pas de baisse parce qu\'aucune image n\'est envoyée)', () => {
+    const auto = new AutoQuality('balanced')
+    for (let i = 0; i < 5; i += 1) assert.equal(auto.sample({ rtt: 30, fps: 0, idle: true }), null)
+    assert.equal(auto.sample({ rtt: 30, fps: 0, idle: true }), PRESETS.high, 'et une connexion à l\'aise remonte quand même')
+    const slow = new AutoQuality('balanced')
+    for (let i = 0; i < 2; i += 1) slow.sample({ rtt: 30, fps: 1, idle: false })
+    assert.equal(slow.sample({ rtt: 30, fps: 1, idle: false }), PRESETS.economy, 'mais peu d\'images alors que l\'écran bouge : l\'agent n\'arrive pas à suivre')
+  })
+
   it('auto : sans mesure de latence, seules les images reçues comptent', () => {
     const auto = new AutoQuality('high')
     for (let i = 0; i < 2; i += 1) assert.equal(auto.sample({ rtt: null, fps: 3 }), null)
     assert.equal(auto.sample({ rtt: null, fps: 3 }), PRESETS.balanced)
+  })
+})
+
+describe('infobulle des statistiques', () => {
+  it('résume latence et mesures de l\'agent, et signale les images abandonnées', () => {
+    assert.equal(statsTitle({ rtt: null, agent: null }), 'Latence et images par seconde')
+    assert.equal(statsTitle({ rtt: 42, agent: null }), 'latence 42 ms')
+    const agent = { fps: 9.8, kbps: 2400, capture_ms: 4.1, encode_ms: 17.3, dropped: 0, idle: false }
+    assert.equal(statsTitle({ rtt: 42, agent }), 'latence 42 ms · 9.8 images/s envoyées · 2400 kb/s · capture 4.1 ms · encodage 17.3 ms')
+    assert.ok(statsTitle({ rtt: 42, agent: { ...agent, dropped: 1 } }).includes('1 abandonnée ('))
+    assert.ok(statsTitle({ rtt: 42, agent: { ...agent, dropped: 4 } }).includes('4 abandonnées'))
+    assert.ok(statsTitle({ rtt: 42, agent: { ...agent, idle: true, fps: 0 } }).includes('écran fixe'))
   })
 })
 

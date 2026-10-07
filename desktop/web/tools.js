@@ -14,7 +14,12 @@ export const streamMessage = (preset) => ({ t: 'stream', fps: preset.fps, qualit
 
 /**
  * Qualité automatique : baisse vite quand la connexion peine, remonte lentement quand elle est à l'aise (hystérésis : trois mauvais échantillons
- * de suite pour baisser, six bons pour remonter), pour ne jamais osciller. Un échantillon = { rtt (ms ou null), fps (reçus par seconde) }.
+ * de suite pour baisser, six bons pour remonter), pour ne jamais osciller.
+ *
+ * Un échantillon = { rtt (ms ou null), fps (images réellement envoyées par seconde), dropped (images que l'agent a dû abandonner faute de place
+ * dans le canal d'envoi), idle (écran fixe : rien à envoyer) }. « Écran fixe » n'est PAS un signe de connexion lente : sans cette précision, un écran
+ * qui ne bouge pas faisait baisser la qualité (peu d'images reçues). Les images abandonnées sont le signal le plus fiable : l'agent les jette quand
+ * le réseau ne suit pas le débit demandé.
  */
 export class AutoQuality {
   constructor(start = 'balanced') { this.level = PRESET_ORDER.indexOf(start); if (this.level < 0) this.level = 1; this.bad = 0; this.good = 0 }
@@ -22,10 +27,10 @@ export class AutoQuality {
   get preset() { return PRESETS[PRESET_ORDER[this.level]] }
 
   /** Renvoie le nouveau préréglage s'il change, sinon null. */
-  sample({ rtt, fps }) {
+  sample({ rtt, fps = 0, dropped = 0, idle = false }) {
     const target = this.preset.fps
-    const slow = (rtt !== null && rtt > 250) || fps < target * 0.5
-    const comfortable = (rtt === null || rtt < 100) && fps >= target * 0.85
+    const slow = (rtt !== null && rtt > 250) || dropped >= 2 || (!idle && fps < target * 0.5)
+    const comfortable = (rtt === null || rtt < 100) && dropped === 0 && (idle || fps >= target * 0.85)
     this.bad = slow ? this.bad + 1 : 0
     this.good = comfortable ? this.good + 1 : 0
     if (this.bad >= 3 && this.level > 0) { this.level -= 1; this.bad = 0; this.good = 0; return this.preset }
@@ -80,6 +85,20 @@ export class FpsMeter {
 export function latencyTone(ms) {
   if (ms === null || ms === undefined) return 'idle'
   return ms < 80 ? 'ok' : ms < 200 ? 'warn' : 'bad'
+}
+
+/** Texte de l'infobulle des statistiques (ce que l'agent mesure de son côté + la latence mesurée ici). */
+export function statsTitle({ rtt, agent }) {
+  const parts = []
+  if (rtt !== null && rtt !== undefined) parts.push(`latence ${rtt} ms`)
+  if (agent) {
+    parts.push(agent.idle ? 'écran fixe (rien à envoyer)' : `${agent.fps} images/s envoyées`)
+    parts.push(`${agent.kbps} kb/s`)
+    parts.push(`capture ${agent.capture_ms} ms`)
+    parts.push(`encodage ${agent.encode_ms} ms`)
+    if (agent.dropped > 0) parts.push(`${agent.dropped} abandonnée${agent.dropped > 1 ? 's' : ''} (réseau trop lent pour ce réglage)`)
+  }
+  return parts.length ? parts.join(' · ') : 'Latence et images par seconde'
 }
 
 // --- Raccourcis clavier -----------------------------------------------------------------------------------------------

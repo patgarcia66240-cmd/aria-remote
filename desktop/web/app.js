@@ -1,7 +1,7 @@
 // Interface d'ARIA Remote Desktop. Tout passe par les commandes Rust (clé du contrôleur, appels réseau) : la page ne voit jamais la clé.
 import { KINDS, guessKind, loadKinds, machineSvg, saveKind } from './machines.js'
 import { createRequest, keyMessage, openSession, pointerMessage, wheelMessage } from './session.js'
-import { AutoQuality, ClipboardSync, FpsMeter, LatencyMeter, PRESETS, PRESET_ORDER, SHORTCUTS, latencyTone, screenLabel, shortcutMessages, streamMessage, stuckKeys } from './tools.js'
+import { AutoQuality, ClipboardSync, FpsMeter, LatencyMeter, PRESETS, PRESET_ORDER, SHORTCUTS, latencyTone, screenLabel, shortcutMessages, statsTitle, streamMessage, stuckKeys } from './tools.js'
 
 const $ = (id) => document.getElementById(id)
 const invoke = window.__TAURI__?.core?.invoke
@@ -271,7 +271,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 function makeTools() {
   return {
     features: new Set(), screens: [], screen: 0, infoSeen: false, started: false, timers: [], clipTimer: null, sync: null, lastToast: 0,
-    latency: new LatencyMeter(), fps: new FpsMeter(), lastFps: null,
+    latency: new LatencyMeter(), fps: new FpsMeter(), lastFps: null, agent: null, freshAgent: false,
     quality: pref('quality', 'auto'), auto: new AutoQuality('balanced'),
     clipOn: pref('clip', '1') === '1',
   }
@@ -293,6 +293,7 @@ function onControl(msg) {
   switch (msg.t) {
     case 'info': return applyInfo(msg)
     case 'pong': return onPong(msg.id)
+    case 'stats': tools.agent = msg; tools.freshAgent = true; return updateStats()
     case 'clip': return receiveClipboard(msg.text)
     case 'denied': {
       if (Date.now() - tools.lastToast > 4000) { tools.lastToast = Date.now(); toast(`L'appareil a refusé : ${msg.reason || 'commande non autorisée'}`, 'bad') }
@@ -313,6 +314,12 @@ function applyInfo(info) {
   tools.infoSeen = true
   refreshToolbar()
   startTools()
+  syncPointerChannel()
+}
+
+/** Les déplacements de souris prennent le canal rapide non fiable quand cet agent le gère (un ancien agent l'ignore). */
+function syncPointerChannel() {
+  if (live && tools?.infoSeen) live.link.usePointerChannel(tools.features.has('pointer'))
 }
 
 function refreshToolbar() {
@@ -342,6 +349,7 @@ function startTools() {
   if (tools.features.has('stream')) every(3000, autoSample)
   startClipboard()
   refreshToolbar()
+  syncPointerChannel()
 }
 
 function stopTools() {
@@ -360,15 +368,19 @@ function onPong(id) {
 
 function tickFps() {
   const value = tools.fps.tick(performance.now())
-  if (value !== null) { tools.lastFps = value; $('v-fps').textContent = `${value} i/s` }
+  if (value !== null) tools.lastFps = value
   updateStats()
 }
 
+/** Affichage : la latence mesurée ici, et les images/s ENVOYÉES par l'agent (plus justes que celles reçues : un écran fixe n'en envoie pas). */
 function updateStats() {
   const average = tools.latency.average
+  const agent = tools.agent
   $('v-lat').textContent = average === null ? '' : `${average} ms`
+  $('v-fps').textContent = agent ? (agent.idle ? 'écran fixe' : `${agent.fps} i/s`) : tools.lastFps === null ? '' : `${tools.lastFps} i/s`
   $('v-stats').dataset.tone = latencyTone(average)
-  show($('v-stats'), average !== null || tools.lastFps !== null)
+  $('v-stats').title = statsTitle({ rtt: average, agent })
+  show($('v-stats'), average !== null || tools.lastFps !== null || !!agent)
 }
 
 function applyQuality() {
@@ -377,8 +389,11 @@ function applyQuality() {
 }
 
 function autoSample() {
-  if (tools.quality !== 'auto' || tools.lastFps === null) return
-  const next = tools.auto.sample({ rtt: tools.latency.average, fps: tools.lastFps })
+  if (tools.quality !== 'auto') return
+  const agent = tools.freshAgent ? tools.agent : null          // chaque rapport de l'agent ne compte qu'une fois
+  if (!agent && tools.lastFps === null) return
+  tools.freshAgent = false
+  const next = tools.auto.sample({ rtt: tools.latency.average, fps: agent ? agent.fps : tools.lastFps, dropped: agent ? agent.dropped : 0, idle: agent ? agent.idle : false })
   if (next) { applyQuality(); toast(`Qualité ajustée automatiquement : ${next.label}`) }
 }
 
@@ -498,13 +513,30 @@ function peek(on) {
 
 // --- Écran distant ----------------------------------------------------------------------------------------------------
 
+// Décodage d'image : si une image arrive pendant qu'une autre est en cours de décodage, seule la plus récente sera affichée (les intermédiaires sont
+// sautées : mieux vaut une image un peu moins fluide qu'un affichage qui prend du retard).
+let decoding = false
+let pendingFrame = null
 async function drawFrame(data) {
-  const canvas_ = $('screen')
-  const bitmap = await createImageBitmap(new Blob([data], { type: 'image/jpeg' }))
-  if (canvas_.width !== bitmap.width || canvas_.height !== bitmap.height) { canvas_.width = bitmap.width; canvas_.height = bitmap.height }
-  canvas_.getContext('2d').drawImage(bitmap, 0, 0)
-  bitmap.close?.()
-  tools?.fps.hit()
+  if (decoding) { pendingFrame = data; return }
+  decoding = true
+  try {
+    let next = data
+    while (next) {
+      pendingFrame = null
+      const canvas_ = $('screen')
+      const bitmap = await createImageBitmap(new Blob([next], { type: 'image/jpeg' })).catch(() => null)
+      if (bitmap) {
+        if (canvas_.width !== bitmap.width || canvas_.height !== bitmap.height) { canvas_.width = bitmap.width; canvas_.height = bitmap.height }
+        canvas_.getContext('2d').drawImage(bitmap, 0, 0)
+        bitmap.close?.()
+        tools?.fps.hit()
+      }
+      next = pendingFrame
+    }
+  } finally {
+    decoding = false
+  }
 }
 
 function moveCursor({ x, y }) {

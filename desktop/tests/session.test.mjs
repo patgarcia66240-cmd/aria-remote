@@ -1,7 +1,7 @@
 // Tests de la négociation et des entrées (web/session.js) : `node --test tests` depuis desktop/.
 import assert from 'node:assert/strict'
 import { describe, it, mock } from 'node:test'
-import { FrameAssembler, createRequest, keyMessage, openSession, pointerMessage, pointerPosition, wheelMessage } from '../web/session.js'
+import { FRAME_CHANNEL, FRAME_LIFETIME_MS, POINTER_CHANNEL, POLL_MS, FrameAssembler, createRequest, keyMessage, openSession, pointerMessage, pointerPosition, wheelMessage } from '../web/session.js'
 
 function chunk(id, index, count, bytes) {
   const buffer = new ArrayBuffer(8 + bytes.length)
@@ -39,6 +39,96 @@ describe('FrameAssembler', () => {
     assert.equal(assembler.push(new ArrayBuffer(3)), null)
     assert.equal(assembler.push(chunk(4, 5, 2, [1])), null)
     assert.equal(assembler.push(null), null)
+  })
+})
+
+describe('FrameAssembler sur un canal non ordonné et à pertes', () => {
+  const frame = (id, size, seed = id) => Uint8Array.from({ length: size }, (_, i) => (i * 7 + seed) % 251)
+  const chunksOf = (id, bytes, size = 100) => { const count = Math.ceil(bytes.length / size); return Array.from({ length: count }, (_, i) => chunk(id, i, count, bytes.slice(i * size, (i + 1) * size))) }
+
+  it('recompose une image dont les morceaux arrivent dans le désordre', () => {
+    const assembler = new FrameAssembler()
+    const bytes = frame(5, 450)
+    const parts = chunksOf(5, bytes)
+    const out = [parts[3], parts[0], parts[4], parts[2], parts[1]].map((c) => assembler.push(c)).filter(Boolean)
+    assert.equal(out.length, 1)
+    assert.deepEqual([...out[0]], [...bytes])
+  })
+
+  it('ignore un morceau en double et ne complète jamais une image à laquelle il manque un morceau', () => {
+    const assembler = new FrameAssembler()
+    const parts = chunksOf(1, frame(1, 300))
+    assert.equal(assembler.push(parts[0]), null)
+    assert.equal(assembler.push(parts[0]), null)
+    assert.equal(assembler.push(parts[2]), null)
+    assert.equal(assembler.push(parts[2]), null)
+    assert.equal(assembler.completed, 0)
+    assert.ok(assembler.push(parts[1]), 'le morceau manquant arrive : l\'image est complète')
+  })
+
+  it('une image plus ancienne que celle déjà affichée est ignorée (jamais de retour en arrière)', () => {
+    const assembler = new FrameAssembler()
+    assert.ok(assembler.push(chunk(10, 0, 1, [1])))
+    assert.equal(assembler.push(chunk(9, 0, 1, [2])), null, 'arrivée tardive d\'une image périmée')
+    assert.equal(assembler.push(chunk(10, 0, 1, [3])), null, 'la même image une seconde fois')
+    assert.ok(assembler.push(chunk(11, 0, 1, [4])))
+  })
+
+  it('une image complète efface les images plus anciennes restées incomplètes', () => {
+    const assembler = new FrameAssembler()
+    assembler.push(chunksOf(1, frame(1, 300))[0])
+    assembler.push(chunksOf(2, frame(2, 300))[1])
+    assert.equal(assembler.pending.size, 2)
+    assert.ok(assembler.push(chunk(3, 0, 1, [9])))
+    assert.equal(assembler.pending.size, 0)
+    assert.equal(assembler.discarded, 2)
+  })
+
+  it('ne garde que quelques images en cours : les plus anciennes sont abandonnées', () => {
+    const assembler = new FrameAssembler()
+    for (let id = 1; id <= 10; id += 1) assembler.push(chunksOf(id, frame(id, 300))[0])
+    assert.ok(assembler.pending.size <= 4)
+    assert.equal(assembler.pending.has(10) && assembler.pending.has(7), true)
+    assert.equal(assembler.pending.has(1), false)
+  })
+
+  it('les numéros d\'image repartent de zéro après 2^32 sans tout bloquer', () => {
+    const assembler = new FrameAssembler()
+    assert.ok(assembler.push(chunk(0xFFFFFFFE, 0, 1, [1])))
+    assert.ok(assembler.push(chunk(0xFFFFFFFF, 0, 1, [2])))
+    assert.ok(assembler.push(chunk(0, 0, 1, [3])), 'l\'image 0 suit l\'image 2^32 - 1')
+    assert.ok(assembler.push(chunk(1, 0, 1, [4])))
+    assert.equal(assembler.push(chunk(0xFFFFFFFF, 0, 1, [5])), null, 'et l\'ancienne reste périmée')
+  })
+
+  it('200 images mélangées avec des morceaux perdus : tout ce qui sort est intact et strictement croissant', () => {
+    let seed = 42
+    const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 2 ** 32 }
+    const originals = new Map()
+    let stream = []
+    for (let id = 1; id <= 200; id += 1) {
+      const bytes = frame(id, 150 + Math.floor(random() * 900))
+      originals.set(id, bytes)
+      stream.push(...chunksOf(id, bytes).filter(() => random() > 0.02))        // 2 % de morceaux perdus
+    }
+    for (let i = stream.length - 1; i > 0; i -= 1) {       // désordre local : on échange des voisins proches, comme sur un vrai réseau
+      const j = Math.max(0, i - Math.floor(random() * 6))
+      ;[stream[i], stream[j]] = [stream[j], stream[i]]
+    }
+    const assembler = new FrameAssembler()
+    const shown = []
+    for (const message of stream) {
+      const out = assembler.push(message)
+      if (out) shown.push(out)
+    }
+    assert.ok(shown.length > 100, `au moins la moitié des images doit passer malgré les pertes (${shown.length})`)
+    let previous = 0
+    for (const bytes of shown) {
+      const id = [...originals.entries()].find(([, original]) => original.length === bytes.length && original.every((v, i) => v === bytes[i]))?.[0]
+      assert.ok(id !== undefined, 'une image recomposée ne correspond à aucune image envoyée : corruption')
+      assert.ok(id > previous, `ordre : ${id} après ${previous}`)
+      previous = id
+    }
   })
 })
 
@@ -84,7 +174,7 @@ function fakePeer(log) {
     localDescription: null,
     channels: [],
     closed: 0,
-    createDataChannel: (label) => { const channel = { label, readyState: 'open', sent: [], send: (data) => channel.sent.push(data) }; peer.channels.push(channel); return channel },
+    createDataChannel: (label, options) => { const channel = { label, options, readyState: 'open', sent: [], send: (data) => channel.sent.push(data) }; peer.channels.push(channel); return channel },
     createOffer: async () => ({ type: 'offer', sdp: 'v=0 offer' }),
     setLocalDescription: async (description) => {
       peer.localDescription = description
@@ -136,6 +226,39 @@ describe('openSession', () => {
     assert.deepEqual(log.at(-1), ['/sessions/sess_test', 'DELETE'])
     assert.ok(peers[0].closed > 0)
     assert.equal(states.at(-1), 'closed')
+  })
+
+  it('crée le canal d\'images non ordonné à fiabilité partielle, et un canal pointeur non fiable', async () => {
+    const { request, log } = backend()
+    let peer
+    await openSession({ ...base, request, makePeer: () => { peer = fakePeer(log); return peer } })
+    const channel = (label) => peer.channels.find((c) => c.label === label)
+    assert.deepEqual(channel('frames').options, { ordered: false, maxPacketLifeTime: FRAME_LIFETIME_MS })
+    assert.deepEqual(channel('frames').options, FRAME_CHANNEL)
+    assert.deepEqual(channel('pointer').options, { ordered: false, maxRetransmits: 0 })
+    assert.deepEqual(channel('pointer').options, POINTER_CHANNEL)
+    assert.equal(channel('control').options, undefined, 'le canal de contrôle reste fiable et ordonné : clics et touches ne se perdent jamais')
+    assert.ok(FRAME_LIFETIME_MS >= 50 && FRAME_LIFETIME_MS <= 500)
+    assert.ok(POLL_MS <= 200, 'négociation : sondage rapide')
+  })
+
+  it('les déplacements de souris prennent le canal rapide seulement quand l\'agent le gère ; clics et touches toujours le canal fiable', async () => {
+    const { request, log } = backend()
+    let peer
+    const link = await openSession({ ...base, request, makePeer: () => { peer = fakePeer(log); return peer } })
+    const sent = (label) => peer.channels.find((c) => c.label === label).sent.map((t) => JSON.parse(t).t)
+    link.sendInput({ t: 'move', x: 0.1, y: 0.1 })
+    assert.deepEqual([sent('control'), sent('pointer')], [['move'], []], 'un ancien agent ne connaît pas le canal pointeur')
+    link.usePointerChannel(true)
+    link.sendInput({ t: 'move', x: 0.2, y: 0.2 })
+    link.sendInput({ t: 'down', x: 0.2, y: 0.2, button: 0 })
+    link.sendInput({ t: 'key', down: true, code: 'KeyA', key: 'a' })
+    link.sendInput({ t: 'ping', id: 1 })
+    assert.deepEqual(sent('pointer'), ['move'])
+    assert.deepEqual(sent('control'), ['move', 'down', 'key', 'ping'])
+    peer.channels.find((c) => c.label === 'pointer').readyState = 'closed'
+    link.sendInput({ t: 'move', x: 0.3, y: 0.3 })
+    assert.equal(sent('control').at(-1), 'move', 'canal pointeur fermé : repli sur le canal fiable')
   })
 
   it('transmet images, infos de l\'écran et curseur distant à leurs écouteurs', async () => {

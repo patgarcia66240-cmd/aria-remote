@@ -1,10 +1,11 @@
 //! Sources d'écran et compression JPEG. Windows : écran principal via xcap. Ailleurs (développement, tests) : image synthétique animée.
 
-use std::io::Cursor;
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
-use image::{codecs::jpeg::JpegEncoder, imageops::FilterType, DynamicImage, RgbImage, RgbaImage};
+use anyhow::{anyhow, bail, Result};
+use fast_image_resize::images::Image as ResizeImage;
+use fast_image_resize::{FilterType, PixelType, ResizeAlg, ResizeOptions, Resizer};
+use jpeg_encoder::{ColorType, Encoder, SamplingFactor};
 
 use super::{Frame, Screen, ScreenSource, Screens};
 
@@ -127,20 +128,48 @@ pub fn synthetic_backend() -> Screens {
     }
 }
 
-/// Réduit si besoin (largeur max) puis compresse en JPEG.
-pub fn encode_jpeg(frame: Frame, max_width: u32, quality: u8) -> Result<Vec<u8>> {
-    let Some(rgba) = RgbaImage::from_raw(frame.width, frame.height, frame.rgba) else {
-        bail!("image brute incohérente avec sa taille");
-    };
-    let mut image = DynamicImage::ImageRgba8(rgba);
-    if image.width() > max_width {
-        let height = (u64::from(image.height()) * u64::from(max_width) / u64::from(image.width())).max(1) as u32;
-        image = image.resize_exact(max_width, height, FilterType::Triangle);
+/// Réduit si besoin (largeur max) puis compresse en JPEG. Garde son outil de mise à l'échelle d'une image à l'autre (il réutilise sa mémoire).
+///
+/// Pourquoi ces choix : sur un écran 1080p, l'ancien chemin (mise à l'échelle « image » + encodeur « image ») coûtait ~120 ms par image, soit
+/// moins de 8 images/s sur un coeur AVANT même l'envoi ; celui-ci en prend ~18 ms (mise à l'échelle SIMD, encodeur JPEG à instructions vectorielles,
+/// chrominance en 4:2:0, pas de conversion RGBA -> RGB intermédiaire).
+pub struct JpegEncoder {
+    resizer: Resizer,
+}
+
+impl JpegEncoder {
+    pub fn new() -> Self {
+        Self { resizer: Resizer::new() }
     }
-    let rgb: RgbImage = image.to_rgb8();     // JPEG sans transparence
-    let mut out = Cursor::new(Vec::new());
-    JpegEncoder::new_with_quality(&mut out, quality).encode_image(&rgb)?;
-    Ok(out.into_inner())
+
+    pub fn encode(&mut self, frame: Frame, max_width: u32, quality: u8) -> Result<Vec<u8>> {
+        let Frame { width, height, rgba } = frame;
+        if width == 0 || height == 0 || rgba.len() != (width as usize) * (height as usize) * 4 {
+            bail!("image brute incohérente avec sa taille");
+        }
+        let (data, out_width, out_height) = if width > max_width {
+            let out_height = (u64::from(height) * u64::from(max_width) / u64::from(width)).max(1) as u32;
+            let source = ResizeImage::from_vec_u8(width, height, rgba, PixelType::U8x4).map_err(|e| anyhow!("{e}"))?;
+            let mut target = ResizeImage::new(max_width, out_height, PixelType::U8x4);
+            let options = ResizeOptions::new().resize_alg(ResizeAlg::Convolution(FilterType::Bilinear));
+            self.resizer.resize(&source, &mut target, &options).map_err(|e| anyhow!("{e}"))?;
+            (target.into_vec(), max_width, out_height)
+        } else {
+            (rgba, width, height)
+        };
+        let (Ok(w), Ok(h)) = (u16::try_from(out_width), u16::try_from(out_height)) else { bail!("écran trop grand pour le JPEG") };
+        let mut out = Vec::with_capacity(data.len() / 12);
+        let mut encoder = Encoder::new(&mut out, quality);
+        encoder.set_sampling_factor(SamplingFactor::F_2_2);
+        encoder.encode(&data, w, h, ColorType::Rgba).map_err(|e| anyhow!("{e}"))?;
+        Ok(out)
+    }
+}
+
+/// Raccourci pour les tests et les usages ponctuels.
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn encode_jpeg(frame: Frame, max_width: u32, quality: u8) -> Result<Vec<u8>> {
+    JpegEncoder::new().encode(frame, max_width, quality)
 }
 
 #[cfg(test)]
@@ -165,6 +194,33 @@ mod tests {
         let frame = SyntheticScreen::new(3200, 1800).capture().unwrap();
         let decoded = image::load_from_memory(&encode_jpeg(frame, 1600, 40).unwrap()).unwrap();
         assert_eq!((decoded.width(), decoded.height()), (1600, 900));
+    }
+
+    /// Mesure sur CETTE machine : `cargo test --release encode_speed -- --ignored --nocapture`. Avant la refonte, 1600 px coûtait ~120 ms par image.
+    #[test]
+    #[ignore = "mesure, pas un test : à lancer à la main"]
+    fn encode_speed_on_this_machine() {
+        let (width, height) = (1920u32, 1080u32);
+        let mut rgba = vec![255u8; (width * height * 4) as usize];
+        let mut seed = 7u32;
+        for (i, px) in rgba.chunks_exact_mut(4).enumerate() {
+            seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            let (x, y) = ((i as u32) % width, (i as u32) / width);
+            let text = (y / 9) % 2 == 0 && (x / 7 + y / 9) % 5 != 0;
+            let base = if text { 40 } else { 245 };
+            px[..3].fill(if (seed >> 24) > 250 { base / 2 } else { base });
+        }
+        let mut encoder = JpegEncoder::new();
+        for max_width in [1600u32, 1024, 2560] {
+            let frame = || Frame { width, height, rgba: rgba.clone() };
+            let _ = encoder.encode(frame(), max_width, 55).unwrap();
+            let runs = 10;
+            let started = std::time::Instant::now();
+            let mut size = 0;
+            for _ in 0..runs { size = encoder.encode(frame(), max_width, 55).unwrap().len(); }
+            let ms = started.elapsed().as_secs_f64() * 1000.0 / f64::from(runs);
+            println!("1920x1080 -> {max_width} px : {ms:.1} ms par image, {} Ko", size / 1024);
+        }
     }
 
     #[test]

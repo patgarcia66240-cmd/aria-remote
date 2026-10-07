@@ -10,6 +10,7 @@ mod config;
 mod identity;
 mod input;
 mod network;
+mod pipeline;
 mod platform;
 mod session;
 mod ui;

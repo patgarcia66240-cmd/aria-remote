@@ -92,6 +92,26 @@ JSON dans les deux sens (le canal « frames » porte les images JPEG). L'agent a
 
 `features` (`ping`, `stream`, `screens`, `clipboard`) dit au contrôleur ce que cet agent sait faire ; `clipboard` n'y figure que si la session a la permission clavier.
 
+## Latence : ce qui a été fait, et pourquoi
+Sur Internet, la latence vient de trois endroits : le **traitement** de l'image avant l'envoi, les **files d'attente** (une image qui attend est une image périmée) et le **transport** (une perte de paquet qui bloque tout ce qui suit).
+
+| Avant | Maintenant |
+|---|---|
+| Mise à l'échelle + JPEG : **~122 ms** par image en 1600 px (moins de 8 images/s sur un coeur, avant même l'envoi) | **~18 ms** (mise à l'échelle SIMD, encodeur JPEG vectoriel, chrominance 4:2:0, pas de conversion intermédiaire) |
+| Capture, encodage et envoi l'un après l'autre | **Trois étapes en parallèle** reliées par des boîtes « dernière valeur » (`pipeline.rs`) : aucune file, la suivante prend toujours l'image la plus récente |
+| Jusqu'à **1 Mo** pouvait attendre dans le canal d'envoi (~1,6 s de retard à 5 Mbit/s) avant de sauter des images | Environ **2,5 images** (96 à 512 Ko, `Governor`) ; la capture est même suspendue quand le canal est saturé (inutile d'encoder pour jeter) |
+| Un écran fixe était encodé et envoyé 10 fois par seconde | Rien n'est envoyé si l'écran n'a pas changé (empreinte 64 bits), sauf un rappel toutes les 1,5 s qui rattrape toute image perdue |
+| Canal d'images fiable **et ordonné** : une seule perte bloquait toutes les images suivantes | Canal **non ordonné à fiabilité partielle** (retransmission 300 ms puis abandon) ; l'assembleur tolère désordre et pertes, ignore ce qui est plus ancien que l'image affichée |
+| Déplacements de souris sur le canal fiable (retardés derrière une perte) | Canal **pointeur non fiable** pour les déplacements (la dernière position suffit) ; clics et touches restent sur le canal fiable |
+| Qualité automatique fondée sur les images reçues (faux sur un écran fixe) | Fondée sur la latence, les **images abandonnées par l'agent** et l'état « écran fixe » |
+| Sondage de la négociation toutes les 400 ms | 150 ms |
+
+L'agent envoie `stats{fps, kbps, capture_ms, encode_ms, dropped, idle}` toutes les 2 s, **seulement** aux contrôleurs qui utilisent les messages récents (`ping`, `stream`, `screen`) : un ancien contrôleur prendrait ce message pour les informations de l'écran. L'application de bureau les affiche dans l'infobulle de la pastille de latence.
+
+**Mesurer sur ta machine :** `cargo test --release encode_speed -- --ignored --nocapture` donne le temps de traitement d'une image 1080p.
+
+**Prochaine étape qui changerait vraiment la donne :** envoyer l'écran comme une **piste vidéo H.264/VP8** (RTP) au lieu d'images JPEG séparées. Compression entre images (5 à 10 fois moins de débit à qualité égale), contrôle de congestion et correction d'erreurs intégrés à WebRTC, décodage matériel chez le contrôleur. Le coût : un encodeur vidéo côté agent (Media Foundation sous Windows, ou OpenH264) et une refonte de l'affichage du contrôleur.
+
 ## Sécurité
 
 - La **clé privée ne quitte jamais l'appareil** (fichier de configuration en 0600 sous Unix). Le serveur ne connaît que la clé publique.

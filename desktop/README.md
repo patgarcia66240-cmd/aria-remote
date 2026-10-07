@@ -20,13 +20,16 @@ Le contrôle n'est possible que si l'appareil l'autorise et que la personne deva
 ### Pendant une session (barre d'outils de l'en-tête)
 | Outil | Ce qu'il fait |
 |---|---|
-| **Latence et images/s** | temps d'aller-retour avec l'appareil (vert < 80 ms, orange < 200 ms, rouge au-delà) et images reçues par seconde |
-| **Qualité de l'image** | Auto (s'adapte à la connexion : baisse vite, remonte lentement), Économie, Équilibré, Haute qualité |
+| **Latence et images/s** | temps d'aller-retour avec l'appareil (vert < 80 ms, orange < 200 ms, rouge au-delà) et images envoyées par seconde (« écran fixe » quand rien ne change). L'infobulle détaille le débit, les temps de capture et d'encodage et les images abandonnées |
+| **Qualité de l'image** | Auto (s'adapte à la connexion : baisse vite, remonte lentement ; fondée sur la latence, les images que l'agent a dû abandonner et l'état « écran fixe »), Économie, Équilibré, Haute qualité |
 | **Écran** | choisir l'écran distant quand l'appareil en a plusieurs ; la souris suit l'écran choisi |
 | **Raccourcis** | touche Windows, Alt + Tab, Ctrl + Maj + Échap (gestionnaire des tâches), Alt + F4. Ctrl + Alt + Suppr est réservé à Windows : impossible à distance |
 | **Presse-papiers partagé** | le texte copié d'un côté se colle de l'autre (256 Ko max, sans écho). Il suit la permission **clavier** : sans elle, rien n'est lu ni écrit |
 | **Capture d'écran** | enregistre l'écran distant en PNG dans le dossier Images (`ARIA-Remote-<appareil>-<date>.png`, jamais d'écrasement) |
 | **Plein écran** | F11 (ou le bouton) ; en plein écran la barre se cache et revient quand la souris touche le haut de la fenêtre. F11 n'est pas envoyé à l'appareil |
+
+### Réseau
+Le canal d'images est **non ordonné à fiabilité partielle** (un paquet perdu est retransmis 300 ms puis abandonné) : une perte n'arrête plus toutes les images suivantes. Seule la **dernière** image est décodée et affichée (les intermédiaires sont sautées plutôt que de prendre du retard). Les déplacements de souris prennent un canal **non fiable** dédié ; clics et touches restent sur le canal fiable. Détails et mesures : `../agent/README.md`, section « Latence ».
 
 Les outils n'apparaissent que si l'agent les annonce (message `info` > `features`) : avec un agent plus ancien, la session fonctionne comme avant, sans ces boutons.
 
