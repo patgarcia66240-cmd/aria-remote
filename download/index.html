@@ -95,6 +95,16 @@
   code { font:14px ui-monospace,SFMono-Regular,Consolas,monospace; background:rgba(125,137,159,.16); padding:2px 7px; border-radius:6px; color:var(--g200); }
   .hash { display:block; margin-top:8px; padding:12px 14px; border-radius:10px; background:var(--g950); border:1px solid var(--g700); font:13.5px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace; color:var(--g200); word-break:break-all; user-select:all; cursor:text; }
 
+
+  .versions { list-style:none; margin:0; padding:0; border:1px solid var(--g700); border-radius:16px; overflow:hidden; background:rgba(23,31,46,.45); }
+  .ver { display:grid; grid-template-columns:minmax(120px,1.1fr) 100px 70px minmax(0,2fr) auto; gap:6px 18px; align-items:center; padding:14px 20px; }
+  .ver + .ver { border-top:1px solid var(--g700); }
+  .ver .vn { display:flex; align-items:center; gap:10px; font-size:16px; } .ver .vn b { font-weight:700; font-variant-numeric:tabular-nums; }
+  .ver .tag { padding:2px 10px; border-radius:999px; font-size:12.5px; font-weight:600; color:var(--ok); background:rgba(52,211,153,.12); border:1px solid rgba(52,211,153,.28); }
+  .ver .vd, .ver .vs { color:var(--g400); font-size:14.5px; font-variant-numeric:tabular-nums; }
+  .ver .vh { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; background:var(--g950); border:1px solid var(--g700); border-radius:8px; padding:5px 10px; font-size:12px; color:var(--g300); user-select:all; cursor:text; }
+  .ver .vl { color:var(--b300); font-weight:600; text-decoration:none; white-space:nowrap; padding:6px 2px; } .ver .vl:hover { text-decoration:underline; }
+
   footer { border-top:1px solid var(--g700); padding:26px 0 44px; color:var(--g500); font-size:14px; display:flex; flex-wrap:wrap; gap:6px 24px; justify-content:space-between; }
 
   @media (max-width:980px) { .keep { grid-template-columns:1fr; } .keepgrid { grid-template-columns:1fr; gap:32px; } .perm { max-width:460px; } }
@@ -104,6 +114,7 @@
     .brand small { display:none; }
     .flow { grid-template-columns:1fr; gap:34px; } .step:not(:last-child)::after { content:""; position:absolute; top:auto; bottom:-31px; right:50%; margin-right:-11px; width:22px; height:22px; z-index:1; background:no-repeat center/contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234a8af0' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12h15m0 0-6-6m6 6-6 6'/%3E%3C/svg%3E"); transform:rotate(90deg); }
     .more { padding-left:22px; }
+    .ver { grid-template-columns:1fr auto; } .ver .vh { grid-column:1 / -1; } .ver .vd { grid-column:1; } .ver .vs { grid-column:2; text-align:right; } .ver .vl { grid-column:1 / -1; }
   }
   @media (prefers-reduced-motion:reduce) { .art .beam, .hero > div > *, .hero .art { animation:none; } * { transition:none !important; scroll-behavior:auto !important; } }
 </style>
@@ -307,6 +318,13 @@
       <p class="sub" style="margin-bottom:28px">Télécharge l'agent, lance-le, et ARIA fera le reste avec ton accord.</p>
       <a class="cta" href="/remote-agent.exe" download><svg class="i"><use href="#i-download"/></svg>Télécharger pour Windows</a>
       <p class="meta">Version __VERSION__ · __SIZE__</p>
+    </section>
+    <section class="block" aria-labelledby="versions">
+      <h2 id="versions">Toutes les versions</h2>
+      <p class="sub" style="margin-bottom:24px">Si une version récente te pose problème, tu peux reprendre une plus ancienne. Chaque fichier a son empreinte SHA-256.</p>
+      <ul class="versions">
+__VERSIONS__
+      </ul>
     </section>
   </main>
 
