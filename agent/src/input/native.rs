@@ -50,6 +50,10 @@ impl InputSink for NativeInput {
         self.enigo.main_display().map(|(w, h)| (w.max(1) as u32, h.max(1) as u32)).unwrap_or((1920, 1080))
     }
 
+    fn cursor(&self) -> Option<(i32, i32)> {
+        self.enigo.location().ok()
+    }
+
     fn move_to(&mut self, x: i32, y: i32) {
         let _ = self.enigo.move_mouse(x, y, Coordinate::Abs);
     }

@@ -69,6 +69,8 @@ impl Control {
 /// Ce que l'agent sait faire sur l'appareil. Implémenté pour Windows (enigo) ; ailleurs, une version qui journalise.
 pub trait InputSink: Send {
     fn display_size(&self) -> (u32, u32);
+    /// Position actuelle du pointeur en pixels (le contrôleur la dessine : la capture d'écran ne contient pas le curseur).
+    fn cursor(&self) -> Option<(i32, i32)> { None }
     fn move_to(&mut self, x: i32, y: i32);
     fn button(&mut self, button: mouse::Button, down: bool);
     fn wheel(&mut self, dx: i32, dy: i32);
@@ -103,18 +105,19 @@ pub fn apply(message: &Control, allowed: &HashSet<Permission>, sink: &mut dyn In
 pub struct LogInput {
     pub log: Vec<String>,
     echo: bool,
+    pointer: Option<(i32, i32)>,
 }
 
 #[cfg_attr(windows, allow(dead_code))]
 impl LogInput {
     #[cfg(test)]
     pub fn new() -> Self {
-        Self { log: Vec::new(), echo: false }
+        Self { log: Vec::new(), echo: false, pointer: None }
     }
 
     /// Affiche chaque action sur la sortie d'erreur : on voit ce que le contrôleur ferait sur un vrai appareil.
     pub fn echoing() -> Self {
-        Self { log: Vec::new(), echo: true }
+        Self { log: Vec::new(), echo: true, pointer: None }
     }
 
     fn record(&mut self, line: String) {
@@ -128,7 +131,8 @@ impl LogInput {
 #[cfg_attr(windows, allow(dead_code))]
 impl InputSink for LogInput {
     fn display_size(&self) -> (u32, u32) { (1280, 720) }
-    fn move_to(&mut self, x: i32, y: i32) { self.record(format!("move {x},{y}")); }
+    fn cursor(&self) -> Option<(i32, i32)> { self.pointer }
+    fn move_to(&mut self, x: i32, y: i32) { self.pointer = Some((x, y)); self.record(format!("move {x},{y}")); }
     fn button(&mut self, button: mouse::Button, down: bool) { self.record(format!("button {button:?} {down}")); }
     fn wheel(&mut self, dx: i32, dy: i32) { self.record(format!("wheel {dx},{dy}")); }
     fn key(&mut self, key: keyboard::LogicalKey, down: bool) { self.record(format!("key {key:?} {down}")); }
@@ -164,6 +168,15 @@ mod tests {
         assert_eq!(apply(&parse(r#"{"t":"down","x":0,"y":0,"button":9}"#), &all, &mut sink), Err("bouton inconnu"));
         assert_eq!(apply(&parse(r#"{"t":"key","down":true,"code":"IntlYen","key":"Unidentified"}"#), &all, &mut sink), Err("touche non prise en charge"));
         assert_eq!(apply(&parse(r#"{"t":"key","down":false,"code":"Enter","key":"Enter"}"#), &all, &mut sink), Ok(()));
+    }
+
+    #[test]
+    fn the_cursor_position_follows_the_last_move() {
+        let mut sink = LogInput::new();
+        let mouse = HashSet::from([Permission::ViewScreen, Permission::ControlMouse]);
+        assert_eq!(sink.cursor(), None);
+        apply(&parse(r#"{"t":"move","x":0.25,"y":0.5}"#), &mouse, &mut sink).unwrap();
+        assert_eq!(sink.cursor(), Some((320, 360)));
     }
 
     #[test]

@@ -16,6 +16,7 @@ use crate::input::{self, Control, InputSink, Permission};
 use crate::network::webrtc::{chunk_frame, MAX_BUFFERED};
 
 pub const FPS: u64 = 10;
+const CURSOR_HZ: u64 = 20;
 
 pub type SourceFactory = Arc<dyn Fn() -> Result<Box<dyn ScreenSource>> + Send + Sync>;
 pub type SharedInput = Arc<Mutex<Box<dyn InputSink>>>;
@@ -47,7 +48,12 @@ fn attach_control(channel: Arc<RTCDataChannel>, permissions: Arc<HashSet<Permiss
         let mut names: Vec<&str> = info_permissions.iter().map(|p| p.as_str()).collect();
         names.sort_unstable();
         let info = serde_json::json!({"t": "info", "width": width, "height": height, "permissions": names}).to_string();
-        Box::pin(async move { let _ = info_channel.send_text(info).await; })
+        let pointer_channel = info_channel.clone();
+        let pointer_input = info_input.clone();
+        Box::pin(async move {
+            let _ = info_channel.send_text(info).await;
+            tokio::spawn(share_cursor(pointer_channel, pointer_input));
+        })
     }));
 
     let reply = channel.clone();
@@ -67,6 +73,27 @@ fn attach_control(channel: Arc<RTCDataChannel>, permissions: Arc<HashSet<Permiss
             }
         })
     }));
+}
+
+/// Envoie la position du pointeur (normalisée 0..1) quand elle change : la capture d'écran ne contient pas le curseur, le contrôleur le dessine.
+async fn share_cursor(channel: Arc<RTCDataChannel>, input: SharedInput) {
+    let mut last = None;
+    loop {
+        tokio::time::sleep(Duration::from_millis(1000 / CURSOR_HZ)).await;
+        let position = input.lock().ok().and_then(|sink| {
+            let (width, height) = sink.display_size();
+            sink.cursor().map(|(x, y)| (x, y, width.max(1), height.max(1)))
+        });
+        if let Some((x, y, width, height)) = position {
+            if last != Some((x, y)) {
+                last = Some((x, y));
+                let message = serde_json::json!({"t": "cursor", "x": x as f64 / width as f64, "y": y as f64 / height as f64}).to_string();
+                if channel.send_text(message).await.is_err() {
+                    return;     // le canal est fermé : la session est terminée
+                }
+            }
+        }
+    }
 }
 
 /// Capture dans un thread dédié (la source d'écran y est créée et y reste), envoi asynchrone avec contrôle de saturation.

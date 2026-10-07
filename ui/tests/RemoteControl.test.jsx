@@ -66,7 +66,8 @@ describe('Contrôle à distance (page Ordinateur)', () => {
     await act(async () => host.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
     const call = fetchMock.mock.calls.find(([url]) => url === '/api/remote/pair')
     expect(JSON.parse(call[1].body)).toEqual({ code: '483921' })
-    expect(host.textContent).toContain('Bureau est appairé.')
+    expect(input.value).toBe('')
+    expect(host.querySelector('[role="status"]')).toBeNull()      // pas de bandeau de confirmation : l'appareil passe simplement dans la liste
   })
 
   it('accepte un code collé avec des espaces (copié depuis l\'agent) sans perdre de chiffre', async () => {

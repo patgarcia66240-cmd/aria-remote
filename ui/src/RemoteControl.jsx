@@ -20,8 +20,9 @@ const STATE_TEXT = {
 const PERMISSION_LABEL = { control_mouse: 'Souris', control_keyboard: 'Clavier' }
 const MOVE_INTERVAL_MS = 30
 
-function Screen({ link, sinkRef, info, onClose, state, permissions }) {
+function Screen({ link, sinkRef, cursorRef, info, onClose, state, permissions }) {
   const canvasRef = useRef(null)
+  const pointerRef = useRef(null)
   const lastMove = useRef(0)
   const canMouse = permissions.includes('control_mouse')
   const canKeyboard = permissions.includes('control_keyboard')
@@ -42,6 +43,18 @@ function Screen({ link, sinkRef, info, onClose, state, permissions }) {
     }
     return () => { sinkRef.current = null }
   }, [sinkRef])
+
+  // Le curseur de l'appareil n'est pas dans l'image capturée : l'agent envoie sa position (0..1), on la dessine par-dessus.
+  useEffect(() => {
+    cursorRef.current = ({ x, y }) => {
+      const pointer = pointerRef.current
+      if (!pointer || !Number.isFinite(x) || !Number.isFinite(y)) return
+      pointer.style.left = `${Math.min(1, Math.max(0, x)) * 100}%`
+      pointer.style.top = `${Math.min(1, Math.max(0, y)) * 100}%`
+      pointer.style.opacity = '1'
+    }
+    return () => { cursorRef.current = null }
+  }, [cursorRef])
 
   const send = (message) => link.sendInput(message)
   const mouse = canMouse ? {
@@ -69,13 +82,21 @@ function Screen({ link, sinkRef, info, onClose, state, permissions }) {
           {info?.width ? ` · ${info.width}×${info.height}` : ''}
           {' · '}Souris : {canMouse ? 'oui' : 'non'} · Clavier : {canKeyboard ? 'oui' : 'non'}
         </p>
-        <button type="button" onClick={onClose} className={SECONDARY}>Déconnecter</button>
+        <button type="button" onClick={onClose} className={`${SECONDARY} inline-flex items-center gap-2`}>
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18.4 6.6a9 9 0 1 1-12.8 0" /><path d="M12 2v10" /></svg>
+          Déconnecter
+        </button>
       </div>
       {/* Hauteur bornée (la barre du dessus reste visible) SANS bandes noires : le canvas garde le ratio de l'écran distant, ce qui garde
           aussi exacte la position de la souris (coordonnées normalisées sur toute la surface du canvas). */}
-      <canvas ref={canvasRef} tabIndex={0} aria-label="Écran distant" width="16" height="9" {...mouse} {...keyboard}
-        style={{ aspectRatio: `${ratio}`, width: `min(100%, calc((100vh - 22rem) * ${ratio}))` }}
-        className="mx-auto block touch-none rounded-lg bg-black outline-none focus:ring-2 focus:ring-blue-400" />
+      <div className="relative mx-auto" style={{ aspectRatio: `${ratio}`, width: `min(100%, calc((100vh - 22rem) * ${ratio}))` }}>
+        <canvas ref={canvasRef} tabIndex={0} aria-label="Écran distant" width="16" height="9" {...mouse} {...keyboard}
+          className="block h-full w-full touch-none rounded-lg bg-black outline-none focus:ring-2 focus:ring-blue-400" />
+        <svg ref={pointerRef} data-testid="remote-cursor" aria-hidden="true" width="18" height="26" viewBox="0 0 18 26"
+          className="pointer-events-none absolute opacity-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]" style={{ left: 0, top: 0 }}>
+          <path d="M1 1 L1 20 L6 15.5 L9.5 24 L13 22.5 L9.5 14.5 L16.5 14.5 Z" fill="#fff" stroke="#111" strokeWidth="1.5" strokeLinejoin="round" />
+        </svg>
+      </div>
       {canKeyboard && <p className="mt-2 text-xs text-gray-500">Clique sur l'écran pour envoyer le clavier à l'appareil.</p>}
     </div>
   )
@@ -106,8 +127,11 @@ function DeviceRow({ device, busy, onConnect }) {
         )}
         {device.paired && optional.length === 0 && <p className="mt-1 text-xs text-gray-500">Cet appareil n'autorise que la consultation de l'écran.</p>}
       </div>
-      <button type="button" disabled={busy || !device.paired || !device.online} onClick={() => onConnect(device, ['view_screen', ...chosen])} className={PRIMARY}>
-        Se connecter
+      <button type="button" disabled={busy || !device.paired || !device.online} onClick={() => onConnect(device, ['view_screen', ...chosen])}
+        aria-label={`Se connecter à ${device.name}`} title="Se connecter" className={`${PRIMARY} inline-flex w-12 items-center justify-center px-0`}>
+        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" /><path d="m10 8 5 3-5 3z" fill="currentColor" />
+        </svg>
       </button>
     </li>
   )
@@ -118,12 +142,12 @@ export default function RemoteControl({ isActive = true }) {
   const [devices, setDevices] = useState([])
   const [error, setError] = useState('')
   const [code, setCode] = useState('')
-  const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
   const [live, setLive] = useState(null)       // { link, device, permissions }
   const [state, setState] = useState('')
   const [info, setInfo] = useState(null)
   const sinkRef = useRef(null)
+  const cursorRef = useRef(null)
 
   const load = useCallback(async () => {
     try {
@@ -146,10 +170,8 @@ export default function RemoteControl({ isActive = true }) {
   const pair = async (event) => {
     event.preventDefault()
     setBusy(true)
-    setNotice('')
     try {
-      const { device } = await post('/pair', { code })
-      setNotice(`${device.name} est appairé.`)
+      await post('/pair', { code })
       setCode('')
       await load()
     } catch (e) {
@@ -166,7 +188,7 @@ export default function RemoteControl({ isActive = true }) {
     try {
       const link = await openSession({
         deviceId: device.device_id, permissions,
-        onState: setState, onInfo: setInfo, onFrame: (data) => sinkRef.current?.(data),
+        onState: setState, onInfo: setInfo, onFrame: (data) => sinkRef.current?.(data), onCursor: (message) => cursorRef.current?.(message),
       })
       setLive({ link, device, permissions })
     } catch (e) {
@@ -190,10 +212,9 @@ export default function RemoteControl({ isActive = true }) {
   return (
     <div className="space-y-4">
       {error && <p role="alert" className="rounded-lg border border-red-800 bg-red-900/30 p-3 text-sm text-red-200">{error}</p>}
-      {notice && <p role="status" className="rounded-lg border border-emerald-800 bg-emerald-900/30 p-3 text-sm text-emerald-200">{notice}</p>}
 
       {live ? (
-        <Screen link={live.link} sinkRef={sinkRef} info={info} state={state} permissions={live.permissions} onClose={disconnect} />
+        <Screen link={live.link} sinkRef={sinkRef} cursorRef={cursorRef} info={info} state={state} permissions={live.permissions} onClose={disconnect} />
       ) : (
         <>
           <section className={CARD}>

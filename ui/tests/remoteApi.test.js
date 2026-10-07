@@ -126,6 +126,22 @@ describe('openSession', () => {
     expect(infos).toEqual([{ t: 'info', width: 1920, height: 1080 }])
   })
 
+  it('envoie la position du curseur distant à son propre écouteur, sans écraser les infos de l\'écran', async () => {
+    const { request, log } = backend()
+    const infos = []
+    const cursors = []
+    let peer
+    await openSession({
+      deviceId: 'dev_bureau_0001', permissions: ['view_screen'], request, sleep: async () => {}, onInfo: (info) => infos.push(info), onCursor: (c) => cursors.push(c),
+      makePeer: () => { peer = fakePeer(log); return peer },
+    })
+    const control = peer.channels.find((c) => c.label === 'control')
+    control.onmessage({ data: '{"t":"info","width":1920,"height":1080}' })
+    control.onmessage({ data: '{"t":"cursor","x":0.25,"y":0.75}' })
+    expect(infos).toEqual([{ t: 'info', width: 1920, height: 1080 }])
+    expect(cursors).toEqual([{ t: 'cursor', x: 0.25, y: 0.75 }])
+  })
+
   it('abandonne et ferme la session si le serveur l\'a terminée pendant la négociation', async () => {
     const { request, log } = backend({ answer: '', state: 'DISCONNECTED' })
     await expect(openSession({ deviceId: 'dev_bureau_0001', permissions: ['view_screen'], request, sleep: async () => {}, makePeer: () => fakePeer(log) }))

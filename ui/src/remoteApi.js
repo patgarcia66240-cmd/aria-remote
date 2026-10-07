@@ -79,7 +79,7 @@ export class FrameAssembler {
  * `makePeer`, `request` et `sleep` sont injectables pour les tests.
  */
 export async function openSession({
-  deviceId, permissions, onState = () => {}, onFrame = () => {}, onInfo = () => {},
+  deviceId, permissions, onState = () => {}, onFrame = () => {}, onInfo = () => {}, onCursor = () => {},
   makePeer = (config) => new RTCPeerConnection(config), request = { api, post }, sleep = sleepMs, timeoutMs = CONNECT_TIMEOUT_MS,
 }) {
   onState('asking')
@@ -112,7 +112,11 @@ export async function openSession({
     control = peer.createDataChannel('control')
     control.onmessage = (event) => {
       if (mine !== generation) return
-      try { onInfo(JSON.parse(event.data)) } catch { /* message de contrôle illisible : ignoré */ }
+      try {
+        const message = JSON.parse(event.data)
+        if (message.t === 'cursor') onCursor(message)     // position du pointeur distant : ne remplace pas les infos de l'écran
+        else onInfo(message)
+      } catch { /* message de contrôle illisible : ignoré */ }
     }
 
     const queued = []            // candidats locaux produits avant que l'offre soit partie
