@@ -93,7 +93,7 @@ Le code d'appairage vaut 30 minutes par défaut ; réglable côté backend par `
 | Sens | Message |
 | --- | --- |
 | serveur → agent | `challenge{nonce}` · `ready{ice_servers}` · `open_session{session_id, permissions, ice_servers}` · `offer{session_id, sdp}` · `ice{session_id, candidate}` · `reconnect{session_id}` · `close_session{session_id}` · `error{detail}` |
-| agent → serveur | `auth{signature}` · `grant{permissions}` · `session_reply{session_id, accepted, reason}` · `answer{session_id, sdp, signature}` · `ice{session_id, candidate}` · `resume{session_id}` · `bye{session_id}` · `ping` |
+| agent → serveur | `auth{signature}` · `grant{permissions, platform?}` (platform : type de machine détecté, « windows », « windows-laptop », « windows-mini ») · `session_reply{session_id, accepted, reason}` · `answer{session_id, sdp, signature}` · `ice{session_id, candidate}` · `resume{session_id}` · `bye{session_id}` · `ping` |
 
 Canaux de données WebRTC ouverts par le navigateur : `frames` (agent → navigateur, images JPEG découpées en morceaux de 16 Ko avec un en-tête de
 8 octets : numéro d'image u32, rang u16, nombre u16) et `control` (JSON : `info`, `move`, `down`, `up`, `wheel`, `key`, `denied`).

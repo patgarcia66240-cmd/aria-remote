@@ -193,6 +193,8 @@ async def _agent_message(connection: AgentConnection, message: dict) -> None:
         service.add_agent_ice(session_id, str(message.get("candidate", "")), device_id)
     elif kind == "grant":
         service.set_granted(device_id, [str(p) for p in message.get("permissions", [])])
+        if "platform" in message:       # l'agent annonce aussi le type de sa machine (facultatif : les anciens agents ne l'envoient pas)
+            service.set_platform(device_id, str(message["platform"]))
     elif kind == "resume":
         service.agent_resumed(session_id, device_id)
     elif kind == "bye":

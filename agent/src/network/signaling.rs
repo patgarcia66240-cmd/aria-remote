@@ -41,7 +41,8 @@ pub enum ServerMessage {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ClientMessage {
     Auth { signature: String },
-    Grant { permissions: Vec<String> },
+    /// Ce que l'appareil autorise, et le type de sa machine (« windows », « windows-laptop »...) : absent chez les anciens agents, ignoré par les anciens serveurs.
+    Grant { permissions: Vec<String>, #[serde(skip_serializing_if = "String::is_empty")] platform: String },
     SessionReply { session_id: String, accepted: bool, reason: String },
     Answer { session_id: String, sdp: String, signature: String },
     Ice { session_id: String, candidate: String },
@@ -72,7 +73,7 @@ struct Registered {
 }
 
 /// Annonce l'appareil (demande SIGNÉE : preuve de possession de la clé privée, anti-rejeu par horodatage et nonce) et renvoie le code à saisir.
-pub async fn register(server: &str, api_key: &str, config: &Config, identity: &Identity) -> Result<(String, u64)> {
+pub async fn register(server: &str, api_key: &str, config: &Config, identity: &Identity, platform: &str) -> Result<(String, u64)> {
     let mut raw = [0u8; 18];
     rand::rngs::OsRng.fill_bytes(&mut raw);
     let nonce = base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, raw);
@@ -81,7 +82,7 @@ pub async fn register(server: &str, api_key: &str, config: &Config, identity: &I
         "device_id": config.device_id,
         "name": config.name,
         "public_key": identity.public_key(),
-        "platform": "windows",
+        "platform": platform,
         "timestamp": timestamp,
         "nonce": nonce,
         "signature": identity.sign(&register_message(&config.device_id, &config.name, timestamp, &nonce)),
@@ -162,6 +163,9 @@ mod tests {
         let reply = serde_json::to_value(ClientMessage::SessionReply { session_id: "s".into(), accepted: false, reason: "non".into() }).unwrap();
         assert_eq!(reply, serde_json::json!({"type": "session_reply", "session_id": "s", "accepted": false, "reason": "non"}));
         assert_eq!(serde_json::to_value(ClientMessage::Ping).unwrap(), serde_json::json!({"type": "ping"}));
-        assert_eq!(serde_json::to_value(ClientMessage::Grant { permissions: vec!["view_screen".into()] }).unwrap()["type"], "grant");
+        assert_eq!(serde_json::to_value(ClientMessage::Grant { permissions: vec!["view_screen".into()], platform: String::new() }).unwrap()["type"], "grant");
+        // le type de machine n'est envoyé que s'il est connu : un ancien serveur reçoit exactement le message d'avant
+        assert!(serde_json::to_value(ClientMessage::Grant { permissions: vec![], platform: String::new() }).unwrap().get("platform").is_none());
+        assert_eq!(serde_json::to_value(ClientMessage::Grant { permissions: vec![], platform: "windows-laptop".into() }).unwrap()["platform"], "windows-laptop");
     }
 }

@@ -78,6 +78,8 @@ pub struct Agent {
     awaiting_console: Option<String>,
     input: Option<SharedInput>,
     pairing_until: Option<Instant>,
+    /// Type de la machine annoncé au serveur (« windows », « windows-laptop »...) ; détecté au démarrage (platform.rs).
+    platform: String,
 }
 
 type Out = mpsc::UnboundedSender<ClientMessage>;
@@ -90,7 +92,7 @@ fn permission_names(set: &HashSet<Permission>) -> Vec<String> {
 
 impl Agent {
     pub fn new(options: Options, config: Config, identity: Identity, commands: mpsc::UnboundedReceiver<UiCommand>) -> Self {
-        Self { options, config, identity, commands, requests: HashMap::new(), active: None, awaiting_console: None, input: None, pairing_until: None }
+        Self { options, config, identity, commands, requests: HashMap::new(), active: None, awaiting_console: None, input: None, pairing_until: None, platform: std::env::consts::OS.to_string() }
     }
 
     fn shared_input(&mut self) -> Result<SharedInput> {
@@ -153,6 +155,8 @@ impl Agent {
                 buffer.clear();
             }
         });
+        self.platform = crate::platform::detect_in_background().await;
+        self.log(format!("type de machine détecté : {}", self.platform));
         self.publish_allow();
 
         // Premier lancement avec la fenêtre : on attend que l'adresse de PC Assistant soit saisie.
@@ -200,7 +204,7 @@ impl Agent {
     /// pour un appareil déjà en ligne) l'état de la liaison ne change pas et une erreur n'est que journalisée.
     async fn issue_pairing_code(&mut self, waiting: bool) {
         if self.pairing_until.map_or(true, |until| Instant::now() >= until) {
-            match signaling::register(&self.options.server, &self.options.api_key, &self.config, &self.identity).await {
+            match signaling::register(&self.options.server, &self.options.api_key, &self.config, &self.identity, &self.platform).await {
                 Ok((code, ttl)) => {
                     self.pairing_until = Some(Instant::now() + Duration::from_secs(ttl.saturating_sub(10)));
                     println!("\n  Code d'appairage : {code}\n  Saisis-le dans ARIA Remote (application de bureau) ou dans ARIA (Ordinateur > Maintenance à distance). Il vaut {} minutes.\n", ttl / 60);
@@ -305,7 +309,7 @@ impl Agent {
     }
 
     fn grant_message(&self) -> ClientMessage {
-        ClientMessage::Grant { permissions: permission_names(&self.options.allow) }
+        ClientMessage::Grant { permissions: permission_names(&self.options.allow), platform: self.platform.clone() }
     }
 
     // -- ordres de la fenêtre ------------------------------------------------------------------------------------------------

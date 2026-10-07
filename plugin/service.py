@@ -2,6 +2,7 @@
 au journal que par les ports (ports.py), remplaçables via `plugin_sdk.ports`. Le service ne transporte JAMAIS la vidéo : il relaie seulement SDP et ICE."""
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable, Iterable
 
@@ -21,6 +22,9 @@ RECONNECT_GRACE = 60.0       # une session qui n'a pas retrouvé son lien au bou
 _default_gateway = hub       # agents connectés en WebSocket ; un autre fournisseur peut le remplacer via ports.provide(PORT_AGENT, …)
 _default_audit = adapters.LogAuditSink()
 _default_store: DeviceStore | None = None
+
+
+PLATFORM_PATTERN = re.compile(r"[a-z0-9_-]{2,20}")
 
 
 class RemoteService:
@@ -90,6 +94,15 @@ class RemoteService:
         device.paired = True
         self.store.save(device)
         self.audit.record("PAIRING_ACCEPTED", device_id=device_id)
+        return device
+
+    def set_platform(self, device_id: str, platform: str) -> Device:
+        """Type de machine annoncé par l'agent authentifié (« windows », « windows-laptop », « windows-mini »...) : sert à l'affichage (bureau, portable,
+        mini PC). Une valeur qui n'a pas la forme attendue est ignorée, jamais enregistrée."""
+        device = self.device(device_id)
+        if PLATFORM_PATTERN.fullmatch(platform) and device.platform != platform:
+            device.platform = platform
+            self.store.save(device)
         return device
 
     def set_granted(self, device_id: str, values: Iterable[str]) -> Device:

@@ -404,6 +404,18 @@ def test_only_the_device_decides_what_it_allows_and_only_v1_permissions(remote):
     assert remote.service.set_granted(DEVICE, []).granted == {Permission.VIEW_SCREEN}       # rien de demandé : on revient au minimum
 
 
+def test_the_agent_announces_its_machine_type_and_a_malformed_value_is_ignored(remote):
+    paired(remote)
+    assert remote.store.get(DEVICE).platform == "windows"
+    assert remote.service.set_platform(DEVICE, "windows-laptop").platform == "windows-laptop"
+    assert remote.service.set_platform(DEVICE, "windows-mini").platform == "windows-mini"
+    for bad in ("", "x", "Windows Laptop", "windows laptop", "a" * 21, "windows;drop", "<script>"):
+        assert remote.service.set_platform(DEVICE, bad).platform == "windows-mini", bad
+    assert remote.store.get(DEVICE).platform == "windows-mini"          # et c'est bien ce qui est enregistré
+    with pytest.raises(NotFound):
+        remote.service.set_platform("dev_inconnu_0001", "windows")
+
+
 def test_agent_ice_candidates_are_readable_by_the_controller_from_an_offset(remote):
     agent = paired(remote)
     session = run(remote.service.create_session(DEVICE))
@@ -627,7 +639,7 @@ def test_agent_websocket_end_to_end_session_with_consent_signed_answer_and_recon
         live.post("/api/remote/signaling/offer", json={"session_id": sid, "sdp": "v=0 offer"})
         assert ws.receive_json() == {"type": "offer", "session_id": sid, "sdp": "v=0 offer"}
         session = service.session(sid)
-        ws.send_json({"type": "grant", "permissions": ["view_screen", "control_mouse"]})
+        ws.send_json({"type": "grant", "permissions": ["view_screen", "control_mouse"], "platform": "windows-laptop"})
         ws.send_json({"type": "ice", "session_id": sid, "candidate": "candidate:agent"})
         ws.send_json({"type": "answer", "session_id": sid, "sdp": "v=0 answer", "signature": Agent().sign(b"intrus")})
         assert ws.receive_json()["type"] == "error"                                  # réponse mal signée : refusée
@@ -639,6 +651,7 @@ def test_agent_websocket_end_to_end_session_with_consent_signed_answer_and_recon
             time.sleep(0.05)
         assert view["state"] == "CONNECTED" and view["answer"] == "v=0 answer" and view["ice"] == ["candidate:agent"]
         assert remote.store.get(DEVICE).granted == {Permission.VIEW_SCREEN, Permission.CONTROL_MOUSE}
+        assert live.get("/api/remote/devices").json()["devices"][0]["platform"] == "windows-laptop"       # le type de machine annoncé par l'agent
         ws.send_json({"type": "bye", "session_id": sid})
         for _ in range(50):
             if service.session(sid).state is SessionState.DISCONNECTED:

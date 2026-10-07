@@ -9,6 +9,7 @@ mod config;
 mod identity;
 mod input;
 mod network;
+mod platform;
 mod session;
 mod ui;
 
