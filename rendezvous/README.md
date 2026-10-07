@@ -35,6 +35,24 @@ curl https://TON_DOMAINE/health        # {"status":"ok"}
 Si le serveur est derrière un NAT (IP publique différente de celle de la machine), ajoute `--external-ip=<IP publique>` à la commande de `coturn`
 dans `docker-compose.yml`.
 
+## Variante sans serveur à louer : Render
+
+Le dépôt contient un `render.yaml` à la racine : sur [Render](https://render.com), **New › Blueprint**, choisis ce dépôt (et la branche indiquée dans le
+fichier), puis valide. Render construit l'image, fournit le **HTTPS** (`https://pc-assistant-rendezvous.onrender.com` ou similaire) et **génère deux
+clés différentes**. Lis-les dans le service, onglet **Environment** : `RENDEZVOUS_AGENT_KEY` (pour les agents) et `RENDEZVOUS_CONTROLLER_KEY` (pour
+`backend/.env`, voir ci-dessous). Vérifie : `https://<ton-service>.onrender.com/health` répond `{"status":"ok"}`.
+
+Ce que Render ne fait pas, et ce que ça change :
+
+| Limite | Conséquence | Que faire |
+| --- | --- | --- |
+| Pas de ports UDP, donc **pas de coturn** | Les connexions qui exigent un relais (certains réseaux d'entreprise, 4G stricte) échouent ; la plupart des réseaux domestiques passent grâce au STUN | Renseigner un service TURN externe : `REMOTE_TURN_URLS`, `REMOTE_TURN_USERNAME`, `REMOTE_TURN_CREDENTIAL` (variables du service) |
+| Offre **gratuite** : le service s'endort sans trafic | La première requête après un temps d'inactivité attend le réveil (plusieurs dizaines de secondes) ; les agents se reconnectent seuls | Offre payante « Starter » pour un service permanent |
+| Offre gratuite : **disque effacé** à chaque redémarrage | Les appareils appairés sont oubliés : l'agent affiche un nouveau code et il faut le ressaisir | Offre payante avec disque persistant monté sur `/app/backend/data` |
+
+**Vercel ne convient pas** : ses fonctions sont sans état et de courte durée, alors que ce serveur garde des connexions WebSocket ouvertes (les agents) et
+un état en mémoire (codes, sessions).
+
 ## Brancher PC Assistant (le contrôleur)
 
 Dans `backend/.env` du PC qui contrôle, puis **redémarre le backend** :
