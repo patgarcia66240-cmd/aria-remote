@@ -1,4 +1,5 @@
 // Interface d'ARIA Remote Desktop. Tout passe par les commandes Rust (clé du contrôleur, appels réseau) : la page ne voit jamais la clé.
+import { KINDS, guessKind, loadKinds, machineSvg, saveKind } from './machines.js'
 import { createRequest, keyMessage, openSession, pointerMessage, wheelMessage } from './session.js'
 
 const $ = (id) => document.getElementById(id)
@@ -27,6 +28,8 @@ let timer = null
 const off = new Map()        // appareil -> permissions désactivées par la personne (tout est activé par défaut)
 let connecting = null        // { id, state } pendant l'attente d'acceptation
 let live = null              // { link, device, permissions }
+let selectedId = null        // appareil montré dans l'aperçu du bas de la carte
+const kinds = loadKinds()    // type de machine choisi par appareil (bureau, mini PC, portable)
 
 const show = (el, on) => { el.hidden = !on }
 const message = (error) => (typeof error === 'string' ? error : error?.message || 'Erreur inattendue.')
@@ -83,7 +86,8 @@ function chosenPermissions(device) {
 }
 
 function deviceRow(device) {
-  const li = el('li', 'device')
+  const li = el('li', 'device' + (device.device_id === selectedId ? ' selected' : ''))
+  li.onclick = (event) => { if (!event.target.closest('button')) { selectedId = device.device_id; renderDevices() } }
   const info = el('div')
   info.append(el('div', 'name', device.name || device.device_id))
   const meta = el('div', 'meta' + (device.online ? ' on' : ''))
@@ -139,8 +143,30 @@ function deviceRow(device) {
 
 function renderDevices() {
   const paired = devices.filter((d) => d.paired !== false)
+  if (!paired.some((d) => d.device_id === selectedId)) selectedId = paired[0]?.device_id ?? null
   $('devices').replaceChildren(...paired.map(deviceRow))
   show($('empty'), paired.length === 0)
+  renderPreview(paired.find((d) => d.device_id === selectedId))
+}
+
+// Aperçu de l'appareil sélectionné : dessin de sa machine (écran allumé s'il est en ligne) et choix du type.
+function renderPreview(device) {
+  show($('preview'), !!device)
+  if (!device) return
+  const kind = kinds[device.device_id] || guessKind(device)
+  $('art').innerHTML = machineSvg(kind, device.online)
+  $('p-name').textContent = device.name || device.device_id
+  const state = $('p-state')
+  state.className = 'pstate' + (device.online ? ' on' : '')
+  state.replaceChildren(el('span', 'dot'), el('span', '', `${KINDS.find((k) => k.id === kind).title} · ${device.online ? 'Disponible' : 'Hors ligne'}`))
+  $('p-kind').replaceChildren(...KINDS.map((k) => {
+    const button = el('button', '', k.label)
+    button.type = 'button'
+    button.setAttribute('role', 'radio')
+    button.setAttribute('aria-checked', String(k.id === kind))
+    button.onclick = () => { kinds[device.device_id] = k.id; saveKind(device.device_id, k.id); renderPreview(device) }
+    return button
+  }))
 }
 
 async function refresh() {

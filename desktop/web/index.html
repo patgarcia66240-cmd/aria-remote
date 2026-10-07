@@ -9,6 +9,10 @@
 <body>
 <!-- Icônes : un seul jeu, dessiné pour s'aligner sur la ligne de texte (24x24, trait de 1.8) -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="scr-on" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2563eb"/><stop offset="1" stop-color="#06b6d4"/></linearGradient>
+    <linearGradient id="scr-off" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#151b27"/><stop offset="1" stop-color="#0e131c"/></linearGradient>
+  </defs>
   <symbol id="i-mouse" viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="5.5"/><path d="M12 2.5v6.5"/></symbol>
   <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.5" y="5.5" width="19" height="13" rx="2.5"/><path d="M6.5 9.5h.01M10 9.5h.01M14 9.5h.01M17.5 9.5h.01M7 14.5h10"/></symbol>
   <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
@@ -57,6 +61,14 @@
       <h2 id="dev-title">Appareils</h2>
       <div class="msg err" id="list-err" role="alert" hidden></div>
       <ul class="devices" id="devices"></ul>
+      <div class="preview" id="preview" hidden>
+        <div class="art" id="art" aria-hidden="true"></div>
+        <div class="pinfo">
+          <b id="p-name"></b>
+          <span class="pstate" id="p-state"></span>
+          <div class="seg" id="p-kind" role="radiogroup" aria-label="Type d'appareil"></div>
+        </div>
+      </div>
       <p class="empty" id="empty" hidden>Aucun appareil pour l'instant. Lance l'agent sur le PC à contrôler (télécharge-le sur processxen.com), puis saisis à droite le code à 6 chiffres qu'il affiche.</p>
     </section>
 

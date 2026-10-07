@@ -14,7 +14,7 @@ npm run dev
 ```
 
 ## État
-Fait : **connexion au serveur** (adresse + clé du contrôleur, testées puis mémorisées), **liste des appareils** (mise à jour toutes les 4 s), **appairage par code** à 6 chiffres et **prise de contrôle** : écran distant, souris, clavier, curseur distant, avec le choix des autorisations (souris / clavier) avant de se connecter.
+Fait : **aperçu de chaque appareil** (dessin d'un PC de bureau, d'un mini PC ou d'un portable, à choisir par appareil), **connexion au serveur** (adresse + clé du contrôleur, testées puis mémorisées), **liste des appareils** (mise à jour toutes les 4 s), **appairage par code** à 6 chiffres et **prise de contrôle** : écran distant, souris, clavier, curseur distant, avec le choix des autorisations (souris / clavier) avant de se connecter.
 Le contrôle n'est possible que si l'appareil l'autorise et que la personne devant l'appareil accepte (une fenêtre s'ouvre sur l'agent).
 
 Comment ça marche : la fenêtre négocie la connexion WebRTC avec l'agent (`web/session.js`, même logique que l'onglet d'ARIA) ; le serveur de rendez-vous ne relaie que le signaling. Les appels au serveur passent par la commande Rust `api_request`, qui n'autorise que les routes du contrôleur.

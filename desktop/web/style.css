@@ -73,6 +73,21 @@ input:focus { border-color: var(--accent); }
 .wait { display: inline-flex; align-items: center; gap: 8px; height: var(--h); color: var(--warn); font-size: 13px; white-space: nowrap; }
 .device button.connect { min-width: 148px; }
 
+/* Aperçu de l'appareil sélectionné : en bas de la carte, avec le choix du type de machine */
+.device { cursor: pointer; border-left: 3px solid transparent; padding-left: 12px; margin-left: -15px; border-radius: 2px; transition: border-color .15s; }
+.device.selected { border-left-color: var(--accent); }
+.preview { display: flex; align-items: center; gap: 22px; margin-top: auto; padding-top: 18px; border-top: 1px solid var(--line); }
+.art { flex: none; width: 210px; }
+.art svg { display: block; width: 100%; height: auto; }
+.pinfo { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.pinfo b { font-size: 17px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.pstate { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; line-height: 1; color: var(--muted); }
+.pstate .dot { width: 8px; height: 8px; } .pstate.on { color: var(--ok); } .pstate.on .dot { background: var(--ok); box-shadow: 0 0 0 3px rgba(52,211,153,.16); }
+.seg { display: inline-flex; gap: 2px; margin-top: 8px; padding: 3px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line); }
+.seg button { height: 30px; padding: 0 12px; border-radius: 9px; background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 600; }
+.seg button[aria-checked="true"] { background: var(--accent); color: #fff; }
+@media (max-width: 560px) { .preview { flex-direction: column; align-items: flex-start; } }
+
 /* Écran distant */
 .viewer { display: flex; flex-direction: column; gap: 12px; }
 body.live main { padding-top: 16px; }
