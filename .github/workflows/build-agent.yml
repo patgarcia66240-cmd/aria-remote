@@ -29,8 +29,11 @@ jobs:
           workspaces: remote-agent
 
       # Les tests tournent AUSSI sous Windows : c'est là que la vraie saisie (enigo), la capture (xcap) et la boîte de dialogue (rfd) sont compilées.
+      # En mode release : la compilation est réutilisée par l'étape suivante (au lieu d'être faite deux fois). Sur une étiquette de version, les tests ont déjà
+      # tourné sur la branche : on ne les refait pas, seule la compilation de l'exe est nécessaire.
       - name: Tests
-        run: cargo test --locked
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        run: cargo test --release --locked
 
       - name: Compilation (release)
         run: cargo build --release --locked
