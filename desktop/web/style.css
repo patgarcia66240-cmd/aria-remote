@@ -74,15 +74,18 @@ input:focus { border-color: var(--accent); }
 
 /* Écran distant */
 .viewer { display: flex; flex-direction: column; gap: 12px; }
-.bar { display: flex; align-items: center; gap: 16px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
-.bar .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.bar .who b { font-size: 16px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.status { font-size: 12.5px; line-height: 1; color: var(--warn); } .status.good { color: var(--ok); }
-.bar .caps { gap: 6px; }
-.badge { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); }
+body.live main { padding-top: 16px; }
+.live-sub { display: flex; align-items: center; gap: 6px; margin-top: 2px; line-height: 1.2; }
+.live-sub b { color: var(--text); font-size: 13px; font-weight: 650; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.live-sub .sep { opacity: .5; }
+.status { font-size: 12.5px; color: var(--warn); } .status.good { color: var(--ok); } .status.bad { color: var(--bad); }
+.size { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; } .size:not(:empty)::before { content: "· "; opacity: .5; }
+header .caps { gap: 6px; }
+.badge { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600; line-height: 1; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); }
 .badge .i { width: 16px; height: 16px; }
 .badge.on { color: var(--accent-2); border-color: rgba(59,130,246,.45); background: rgba(59,130,246,.12); }
-.stage { position: relative; margin: 0 auto; aspect-ratio: var(--ratio); width: min(100%, calc((100vh - 235px) * var(--ratio))); }
+button.compact { height: 36px; padding: 0 14px; border-radius: 10px; font-size: 14px; }
+.stage { position: relative; margin: 0 auto; aspect-ratio: var(--ratio); width: min(100%, calc((100vh - 150px) * var(--ratio))); }
 .stage canvas { display: block; width: 100%; height: 100%; background: #000; border-radius: 10px; touch-action: none; outline: none; }
 .stage canvas:focus-visible { box-shadow: 0 0 0 2px var(--accent-2); outline: none; }
 .cursor { position: absolute; left: 0; top: 0; opacity: 0; pointer-events: none; filter: drop-shadow(0 1px 2px rgba(0,0,0,.8)); }

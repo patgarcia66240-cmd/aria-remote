@@ -63,6 +63,12 @@ function render() {
   show($('home'), !needSetup && !live)
   show($('viewer'), !needSetup && !!live)
   show($('open-settings'), settings.configured && !editing && !live)
+  // En session, l'en-tête porte tout : appareil, état, autorisations et « Déconnecter » (pas de second bandeau).
+  const inSession = !needSetup && !!live
+  document.body.classList.toggle('live', inSession)
+  show($('sub-idle'), !inSession); show($('sub-live'), inSession)
+  show($('v-caps'), inSession); show($('disconnect'), inSession)
+  if (inSession) pill(null, '')
   show($('cancel-settings'), settings.configured)
   $('key-opt').textContent = settings.configured ? '(laisse vide pour garder la clé enregistrée)' : ''
   if (needSetup) { pill(null, ''); stopPolling() } else startPolling()
@@ -223,14 +229,13 @@ async function connectTo(device) {
 function viewerState(state) {
   const text = STATE_TEXT[state] || state
   $('v-state').textContent = text
-  $('v-state').className = 'status' + (state === 'connected' ? ' good' : '')
-  pill(state === 'connected' ? 'ok' : state === 'lost' ? 'bad' : 'warn', text)
+  $('v-state').className = 'status' + (state === 'connected' ? ' good' : state === 'lost' ? ' bad' : '')
 }
 
 function viewerInfo(info) {
   if (!info?.width || !info?.height) return
   $('stage').style.setProperty('--ratio', (info.width / info.height).toFixed(4))
-  $('v-state').dataset.size = `${info.width}×${info.height}`
+  $('v-size').textContent = `${info.width}×${info.height}`
 }
 
 async function drawFrame(data) {
@@ -252,6 +257,7 @@ function moveCursor({ x, y }) {
 function openViewer() {
   const { device, permissions } = live
   $('v-name').textContent = device.name
+  $('v-size').textContent = ''
   $('cursor').style.opacity = '0'
   const caps = $('v-caps')
   caps.replaceChildren(...PERMISSIONS.map((p) => {
