@@ -227,7 +227,7 @@ export default function RemoteControl({ isActive = true }) {
 
           {status?.mode === 'rendezvous' ? (
             <p className="text-xs text-gray-500">
-              Accès par Internet via le serveur de rendez-vous {status.server}. Les appareils s\'y connectent d\'eux-mêmes : aucun port à ouvrir chez eux.
+              Accès par Internet via le serveur de rendez-vous {status.server}. Les appareils s'y connectent d'eux-mêmes : aucun port à ouvrir chez eux.
             </p>
           ) : status && !status.turn_configured && (
             <p className="text-xs text-gray-500">
