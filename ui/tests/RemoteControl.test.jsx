@@ -42,7 +42,7 @@ describe('Contrôle à distance (page Ordinateur)', () => {
     expect(host.textContent).toContain('Bureau')
     expect(host.textContent).toContain('Disponible')
     expect(host.textContent).toContain('Hors ligne')
-    const [bureau, salon] = [...host.querySelectorAll('li button')]
+    const [bureau, salon] = [...host.querySelectorAll('li button[aria-label^="Se connecter"]')]
     expect(bureau.disabled).toBe(false)
     expect(salon.disabled).toBe(true)
   })
@@ -50,9 +50,23 @@ describe('Contrôle à distance (page Ordinateur)', () => {
   it('ne propose que les permissions que l\'appareil autorise', async () => {
     await render()
     const rows = host.querySelectorAll('li')
-    expect(rows[0].textContent).toContain('Souris')
-    expect(rows[0].textContent).not.toContain('Clavier')
-    expect(rows[1].textContent).toContain('n\'autorise que la consultation')
+    expect(rows[0].querySelector('button[aria-label="Souris"]')).not.toBeNull()
+    expect(rows[0].querySelector('button[aria-label="Clavier"]')).toBeNull()
+    expect(rows[1].textContent).toContain('Vue seule')
+    expect(rows[1].querySelector('button[aria-pressed]')).toBeNull()
+  })
+
+  it('les icônes souris et clavier se basculent et décident des permissions demandées à la connexion', async () => {
+    const fetchMock = await render({ devices: [{ ...DEVICES[0], granted: ['view_screen', 'control_mouse', 'control_keyboard'] }] })
+    const mouse = host.querySelector('button[aria-label="Souris"]')
+    const keyboard = host.querySelector('button[aria-label="Clavier"]')
+    expect(mouse.getAttribute('aria-pressed')).toBe('false')
+    await act(async () => mouse.click())
+    expect(mouse.getAttribute('aria-pressed')).toBe('true')
+    expect(keyboard.getAttribute('aria-pressed')).toBe('false')
+    await act(async () => host.querySelector('button[aria-label^="Se connecter"]').click())
+    const call = fetchMock.mock.calls.find(([url]) => url === '/api/remote/sessions')
+    expect(JSON.parse(call[1].body)).toEqual({ device_id: 'dev_bureau_0001', permissions: ['view_screen', 'control_mouse'] })
   })
 
   it('appaire avec le code à 6 chiffres, en ignorant tout ce qui n\'est pas un chiffre', async () => {

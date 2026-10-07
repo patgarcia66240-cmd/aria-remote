@@ -4,7 +4,7 @@ import { api, keyMessage, openSession, pointerMessage, post, wheelMessage } from
 // Sous-onglet « Maintenance à distance » de la page Ordinateur (plugin remote, docs/REMOTE_ARCHITECTURE.md) : appareils
 // appairés, code d'appairage, ouverture d'une session et écran distant piloté à la souris et au clavier.
 // Le contrôle n'est possible que si l'appareil l'autorise (c'est lui qui décide) et que sa personne accepte.
-const CARD = 'rounded-2xl border border-gray-700 bg-gray-800/70 p-4'
+const CARD = 'rounded-2xl border border-gray-700 bg-gray-800/70 p-3'
 const BUTTON = 'min-h-10 cursor-pointer rounded-lg px-4 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50'
 const PRIMARY = `${BUTTON} bg-blue-600 text-white hover:bg-blue-500`
 const SECONDARY = `${BUTTON} border border-gray-600 text-gray-200 hover:bg-gray-700`
@@ -18,6 +18,11 @@ const STATE_TEXT = {
   closed: 'Session terminée',
 }
 const PERMISSION_LABEL = { control_mouse: 'Souris', control_keyboard: 'Clavier' }
+const ICON = { width: 20, height: 20, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true }
+const PERMISSION_ICON = {
+  control_mouse: <svg {...ICON}><rect x="6" y="2" width="12" height="20" rx="6" /><path d="M12 2v7" /></svg>,
+  control_keyboard: <svg {...ICON}><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M7 13h.01M17 13h.01M9 16h6" /></svg>,
+}
 const MOVE_INTERVAL_MS = 30
 
 function Screen({ link, sinkRef, cursorRef, info, onClose, state, permissions }) {
@@ -107,29 +112,30 @@ function DeviceRow({ device, busy, onConnect }) {
   const [chosen, setChosen] = useState([])
   const toggle = (permission) => setChosen((prev) => (prev.includes(permission) ? prev.filter((p) => p !== permission) : [...prev, permission]))
   return (
-    <li className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-700 bg-gray-900/40 p-3">
-      <div className="min-w-0">
-        <p className="font-medium text-white">{device.name}</p>
-        <p className="text-xs text-gray-400">
+    <li className="flex items-center gap-3 rounded-xl border border-gray-700 bg-gray-900/40 px-3 py-2">
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium text-white">{device.name}</p>
+        <p className="truncate text-xs text-gray-400">
           <span className={device.online ? 'text-emerald-300' : 'text-gray-500'}>● {device.online ? 'Disponible' : 'Hors ligne'}</span>
-          {' · '}empreinte {device.fingerprint}
-          {!device.paired && ' · pas encore appairé'}
+          <span title={`Empreinte ${device.fingerprint}`}>{' · '}{device.fingerprint.slice(0, 8)}</span>
+          {!device.paired && ' · pas appairé'}
         </p>
-        {device.paired && optional.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-4 text-sm text-gray-300">
-            {optional.map((permission) => (
-              <label key={permission} className="flex cursor-pointer items-center gap-2">
-                <input type="checkbox" checked={chosen.includes(permission)} onChange={() => toggle(permission)} />
-                {PERMISSION_LABEL[permission]}
-              </label>
-            ))}
-          </div>
-        )}
-        {device.paired && optional.length === 0 && <p className="mt-1 text-xs text-gray-500">Cet appareil n'autorise que la consultation de l'écran.</p>}
       </div>
+      {device.paired && optional.map((permission) => {
+        const on = chosen.includes(permission)
+        const label = PERMISSION_LABEL[permission]
+        return (
+          <button key={permission} type="button" aria-pressed={on} aria-label={label} title={`${label} : ${on ? 'activée pour la session' : 'désactivée'}`}
+            onClick={() => toggle(permission)}
+            className={`inline-flex size-10 cursor-pointer items-center justify-center rounded-lg border transition-colors ${on ? 'border-blue-400 bg-blue-600 text-white shadow-[0_0_0_3px_rgba(96,165,250,0.25)]' : 'border-gray-600 text-gray-500 hover:bg-gray-700 hover:text-gray-300'}`}>
+            {PERMISSION_ICON[permission]}
+          </button>
+        )
+      })}
+      {device.paired && optional.length === 0 && <span className="text-xs text-gray-500" title="Cet appareil n'autorise que la consultation de l'écran">Vue seule</span>}
       <button type="button" disabled={busy || !device.paired || !device.online} onClick={() => onConnect(device, ['view_screen', ...chosen])}
         aria-label={`Se connecter à ${device.name}`} title="Se connecter" className={`${PRIMARY} inline-flex w-12 items-center justify-center px-0`}>
-        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg {...ICON} width="22" height="22">
           <rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" /><path d="m10 8 5 3-5 3z" fill="currentColor" />
         </svg>
       </button>
@@ -228,27 +234,29 @@ export default function RemoteControl({ isActive = true }) {
                     : ' Saisis le code à 6 chiffres affiché par l\'agent.'}
               </p>
             ) : (
-              <ul className="mt-3 space-y-2">
+              <ul className="mt-2 space-y-2">
                 {devices.map((device) => <DeviceRow key={device.device_id} device={device} busy={busy} onConnect={connect} />)}
               </ul>
             )}
             {busy && state === 'asking' && <p role="status" className="mt-3 text-sm text-amber-300">{STATE_TEXT.asking}</p>}
           </section>
 
-          <form onSubmit={pair} className={CARD}>
-            <label htmlFor="remote-code" className="text-sm font-semibold text-gray-200">Code d'appairage</label>
-            <p className="mt-1 text-xs text-gray-400">Le code est affiché par l'agent sur l'appareil à contrôler ; il a une durée limitée (30 minutes par défaut) et ne sert qu'une fois.</p>
-            <div className="mt-3 flex gap-2">
+          <form onSubmit={pair} className={`${CARD} flex flex-wrap items-center justify-between gap-3`}>
+            <div className="min-w-0">
+              <label htmlFor="remote-code" className="text-sm font-semibold text-gray-200">Code d'appairage</label>
+              <p className="text-xs text-gray-400">Affiché par l'agent sur l'appareil à contrôler · valable 30 min · usage unique</p>
+            </div>
+            <div className="flex gap-2">
               <input id="remote-code" inputMode="numeric" autoComplete="off" value={code} placeholder="483921"
                 onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
-                className="min-h-10 w-40 rounded-lg border border-gray-600 bg-gray-900 px-3 text-center font-mono tracking-widest text-white" />
+                className="min-h-10 w-36 rounded-lg border border-gray-600 bg-gray-900 px-3 text-center font-mono tracking-widest text-white placeholder:text-gray-600" />
               <button type="submit" disabled={busy || code.length !== 6} className={PRIMARY}>Appairer</button>
             </div>
           </form>
 
           {status?.mode === 'rendezvous' ? (
             <p className="text-xs text-gray-500">
-              Accès par Internet via le serveur de rendez-vous {status.server}. Les appareils s'y connectent d'eux-mêmes : aucun port à ouvrir chez eux.
+              Accès par Internet via le serveur de rendez-vous {status.server} · aucun port à ouvrir chez les appareils.
             </p>
           ) : status && !status.turn_configured && (
             <p className="text-xs text-gray-500">
