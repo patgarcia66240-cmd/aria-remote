@@ -35,6 +35,30 @@ curl https://TON_DOMAINE/health        # {"status":"ok"}
 Si le serveur est derrière un NAT (IP publique différente de celle de la machine), ajoute `--external-ip=<IP publique>` à la commande de `coturn`
 dans `docker-compose.yml`.
 
+## Sur un VPS Hostinger (avec n8n déjà installé)
+
+Le modèle « Ubuntu 24.04 with n8n » utilise **Traefik sur les ports 80 et 443** : un second serveur HTTPS entrerait en conflit. `install-vps.sh`
+**détecte Traefik**, lit ses réglages réels (réseau, résolveur de certificats, point d'entrée) et branche le serveur de rendez-vous dessus avec
+`docker-compose.traefik.yml`. Rien n'est modifié dans le projet n8n : le serveur de rendez-vous est un projet Docker séparé.
+
+1. **DNS** : crée un enregistrement **A** (par exemple `rendezvous.mondomaine.fr`) vers l'IP du VPS. Sans nom de domaine, `--sslip` utilise
+   `<ip-avec-des-tirets>.sslip.io` ; son certificat est valide, mais la limite de certificats Let's Encrypt est partagée entre tous les utilisateurs de ce
+   service.
+2. **Terminal** : ouvre le terminal du VPS (terminal du navigateur dans hPanel, ou SSH).
+3. **Récupérer le code** : le dépôt est privé. Crée sur GitHub un jeton à accès fin, **lecture seule** du contenu de ce dépôt, puis :
+   ```bash
+   git clone -b chore/frontend-audit-p1 https://<JETON>@github.com/patgarcia66240-cmd/pc-assistant.git
+   cd pc-assistant/remote-rendezvous
+   ```
+   Révoque le jeton ensuite (ou supprime-le) : il n'est plus utile, sauf pour les mises à jour.
+4. **Installer** : `sudo ./install-vps.sh --domain rendezvous.mondomaine.fr` (ou `--sslip`). Teste d'abord avec `--dry-run` : il montre tout ce qui serait fait sans rien exécuter.
+5. Le script affiche à la fin les deux lignes à copier dans `backend/.env` (contrôleur) et la fenêtre de l'agent.
+
+Ports : `3478` (TCP et UDP) et `49152–65535` (UDP) servent au relais. Ils doivent être joignables depuis Internet. Si tu actives un jour le pare-feu
+Hostinger, ouvre-les, avec 80 et 443 (déjà utilisés par Traefik) et 22 (SSH).
+
+Contrairement à la variante Render gratuite, les appareils appairés **sont conservés** (volume Docker) et le service ne s'endort pas.
+
 ## Variante sans serveur à louer : Render
 
 Le dépôt contient un `render.yaml` à la racine : sur [Render](https://render.com), **New › Blueprint**, choisis ce dépôt (et la branche indiquée dans le
