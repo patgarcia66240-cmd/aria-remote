@@ -180,7 +180,7 @@ function render() {
   $('setup').hidden = !needSetup
   if (needSetup && !$('srv').dataset.touched) $('srv').value = s.server && s.link !== 'setup' ? s.server : $('srv').value
   const connected = !needSetup
-  $('pair').hidden = !(connected && s.link === 'unpaired' && s.pairing_code)
+  $('pair').hidden = !(connected && (s.link === 'unpaired' || s.link === 'connecting') && s.pairing_code)
   $('ready').hidden = !(connected && s.link === 'online' && !s.session)
   $('session').hidden = !(connected && s.session)
   $('perms').hidden = !(connected && s.link !== 'setup')

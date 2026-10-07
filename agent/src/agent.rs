@@ -169,7 +169,10 @@ impl Agent {
         }
 
         loop {
-            self.set_link("connecting", "");
+            // Tant qu'un code d'appairage est affiché, chaque nouvelle tentative de connexion (toutes les 3 s) ne doit pas le faire clignoter.
+            if self.pairing_until.map_or(true, |until| Instant::now() >= until) {
+                self.set_link("connecting", "");
+            }
             match signaling::connect(&self.options.server, &self.options.api_key, &self.config.device_id).await {
                 Ok(socket) => match self.connection(socket, &mut lines).await {
                     Ok(Outcome::Quit) => return Ok(()),
