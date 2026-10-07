@@ -77,6 +77,25 @@ Ce que Render ne fait pas, et ce que ça change :
 **Vercel ne convient pas** : ses fonctions sont sans état et de courte durée, alors que ce serveur garde des connexions WebSocket ouvertes (les agents) et
 un état en mémoire (codes, sessions).
 
+## Vérifier un déploiement (Render, VPS…)
+
+```bash
+python remote-rendezvous/check_server.py https://pc-assistant-rendezvous.onrender.com
+```
+
+L'outil lit les clés dans `RENDEZVOUS_AGENT_KEY` et `RENDEZVOUS_CONTROLLER_KEY` (ou les demande, sans les afficher) et vérifie : réponse de `/health` (il
+attend jusqu'à deux minutes le réveil d'une offre gratuite), HTTPS, absence de documentation publique, **refus** sans clé et avec une mauvaise clé,
+**séparation des rôles** (la clé des agents ne liste rien, celle du contrôleur est refusée sur le canal des agents), ouverture du WebSocket des agents, et
+serveurs STUN/TURN fournis. Il ne modifie rien. Python suffit, sans dépendance ; à relancer à chaque changement de serveur.
+
+**Essai de bout en bout** (dans cet ordre) :
+1. `check_server.py` répond « Tout est conforme » (seul le TURN peut rester « non configuré » sur Render).
+2. Sur le PC de contrôle : `backend/.env` avec `REMOTE_RENDEZVOUS_URL` et `REMOTE_RENDEZVOUS_KEY`, redémarrer le backend ; l'onglet Maintenance à distance
+   affiche « Accès par Internet via le serveur de rendez-vous ».
+3. Sur l'autre PC : l'agent, adresse du serveur + clé des agents ; un code à 6 chiffres s'affiche dans sa fenêtre.
+4. Saisir le code dans l'onglet (« Appairer »), puis « Se connecter » ; accepter dans la fenêtre de l'agent.
+5. Idéalement, **avec deux réseaux différents** (par exemple l'agent sur un partage de connexion 4G) : c'est ce qui prouve que l'accès par Internet marche.
+
 ## Brancher PC Assistant (le contrôleur)
 
 Dans `backend/.env` du PC qui contrôle, puis **redémarre le backend** :
