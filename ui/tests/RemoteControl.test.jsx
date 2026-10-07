@@ -69,6 +69,15 @@ describe('Contrôle à distance (page Ordinateur)', () => {
     expect(host.textContent).toContain('Bureau est appairé.')
   })
 
+  it('accepte un code collé avec des espaces (copié depuis l\'agent) sans perdre de chiffre', async () => {
+    await render()
+    const input = host.querySelector('#remote-code')
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
+    await act(async () => { setValue.call(input, ' 085 201 '); input.dispatchEvent(new Event('input', { bubbles: true })) })
+    expect(input.value).toBe('085201')
+    expect(host.querySelector('form button').disabled).toBe(false)
+  })
+
   it('affiche l\'erreur du serveur quand le code est refusé', async () => {
     await render({ pairResult: new Response(JSON.stringify({ detail: 'Code invalide ou expiré.' }), { status: 400 }) })
     const input = host.querySelector('#remote-code')

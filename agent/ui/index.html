@@ -99,6 +99,7 @@
     <div class="code" id="code"></div>
     <p class="hint">Saisis ce code dans PC Assistant :<br><b>Ordinateur › Maintenance à distance › Code d'appairage</b></p>
     <p class="hint" id="code-timer"></p>
+    <div class="actions"><button class="ghost" id="copy-code">Copier le code</button></div>
   </section>
 
   <!-- Prêt -->
@@ -218,7 +219,18 @@ async function poll() {
 }
 
 $('save').onclick = () => { editingSetup = false; act('/api/setup', { server: $('srv').value, api_key: $('key').value }) }
-$('srv').oninput = () => { $('srv').dataset.touched = 1 }
+$('copy-code').onclick = async () => {
+  const code = state?.pairing_code || ''
+  if (!code) return
+  try { await navigator.clipboard.writeText(code) }
+  catch { // contexte sans API presse-papiers : repli par sélection temporaire
+    const field = Object.assign(document.createElement('textarea'), { value: code })
+    document.body.appendChild(field); field.select(); document.execCommand('copy'); field.remove()
+  }
+  $('copy-code').textContent = 'Code copié ✓'
+  setTimeout(() => { $('copy-code').textContent = 'Copier le code' }, 2000)
+}
+$('srv').oninput =() => { $('srv').dataset.touched = 1 }
 $('change-server').onclick = $('settings').onclick = () => { editingSetup = true; render(); $('srv').focus() }
 $('accept').onclick = () => act('/api/consent', { session_id: $('accept').dataset.id, accept: true })
 $('refuse').onclick = () => act('/api/consent', { session_id: $('refuse').dataset.id, accept: false })

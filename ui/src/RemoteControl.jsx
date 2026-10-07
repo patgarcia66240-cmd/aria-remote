@@ -218,8 +218,8 @@ export default function RemoteControl({ isActive = true }) {
             <label htmlFor="remote-code" className="text-sm font-semibold text-gray-200">Code d'appairage</label>
             <p className="mt-1 text-xs text-gray-400">Le code est affiché par l'agent sur l'appareil à contrôler ; il a une durée limitée (30 minutes par défaut) et ne sert qu'une fois.</p>
             <div className="mt-3 flex gap-2">
-              <input id="remote-code" inputMode="numeric" autoComplete="off" maxLength={6} value={code} placeholder="483921"
-                onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))}
+              <input id="remote-code" inputMode="numeric" autoComplete="off" value={code} placeholder="483921"
+                onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
                 className="min-h-10 w-40 rounded-lg border border-gray-600 bg-gray-900 px-3 text-center font-mono tracking-widest text-white" />
               <button type="submit" disabled={busy || code.length !== 6} className={PRIMARY}>Appairer</button>
             </div>
