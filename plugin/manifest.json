@@ -1,7 +1,7 @@
 {
   "id": "remote",
   "name": "Contrôle à distance",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Contrôle d'un PC distant (voir docs/REMOTE_ARCHITECTURE.md) : appareils appairés par code et clé Ed25519, permissions, sessions, signaling et passerelle WebSocket vers l'agent Windows (agent/). Rangé dans la page Ordinateur.",
   "router_prefix": "/api/remote",
   "permission": "EXTERNAL",

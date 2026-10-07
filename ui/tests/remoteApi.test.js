@@ -20,6 +20,14 @@ describe('FrameAssembler', () => {
     expect([...assembler.push(chunk(8, 0, 1, [9]))]).toEqual([9])
   })
 
+  it('accepte les morceaux dans le désordre et ignore une image plus ancienne que celle déjà affichée', () => {
+    const assembler = new FrameAssembler()
+    expect(assembler.push(chunk(5, 1, 2, [3, 4]))).toBeNull()
+    expect([...assembler.push(chunk(5, 0, 2, [1, 2]))]).toEqual([1, 2, 3, 4])
+    expect(assembler.push(chunk(4, 0, 1, [9]))).toBeNull()            // plus ancienne : inutile
+    expect([...assembler.push(chunk(6, 0, 1, [7]))]).toEqual([7])
+  })
+
   it('abandonne une image incomplète quand la suivante commence, et ignore les messages invalides', () => {
     const assembler = new FrameAssembler()
     assembler.push(chunk(1, 0, 2, [1]))
