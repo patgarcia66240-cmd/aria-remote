@@ -36,6 +36,10 @@ enigo = "0.6"
 rfd = "0.15"
 xcap = "0.9"
 
+# Identité de l'exe Windows (icône, éditeur, description, version) : voir build.rs. Compilée seulement quand on construit SOUS Windows.
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
+
 # Compilation rapide d'abord : « lto = true » + « codegen-units = 1 » rendaient l'étape finale (368/369) très longue et gourmande en mémoire avec
 # webrtc, pour un gain de vitesse négligeable ici (le travail lourd est le JPEG, déjà optimisé). Les dépendances sont optimisées même en dev,
 # sinon l'encodage JPEG y est trop lent pour un flux fluide.

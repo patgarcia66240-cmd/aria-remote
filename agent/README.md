@@ -95,3 +95,18 @@ no-cli
 ```bash
 cargo test    # identité, configuration, permissions, mapping clavier/souris, JPEG, découpage des images, messages du protocole
 ```
+
+## Identité et signature de l'exe Windows
+
+**Identité (déjà en place).** `build.rs` intègre à l'exe, quand on le compile sous Windows, une icône (`assets/icon.ico`, la marque ARIA), le nom du produit, une description et la version de `Cargo.toml`. Windows les affiche dans l'explorateur (Propriétés › Détails), le gestionnaire de tâches et la fenêtre d'avertissement. Pour changer l'éditeur ou le copyright affichés, modifie les lignes `CompanyName` et `LegalCopyright` de `build.rs`. Le numéro de version suit `version` dans `Cargo.toml` : change-le avant de publier une étiquette `agent-vX.Y.Z`.
+
+**Signature (à activer).** Le message SmartScreen « Éditeur inconnu » ne disparaît qu'avec une signature de code. Le workflow `.github/workflows/build-agent.yml` signe l'exe tout seul dès que ces deux secrets existent (GitHub › Settings › Secrets and variables › Actions) :
+
+| Secret | Contenu |
+| --- | --- |
+| `WINDOWS_CERT_PFX_BASE64` | le certificat de signature de code (`.pfx`) encodé en base64 |
+| `WINDOWS_CERT_PASSWORD` | le mot de passe du `.pfx` |
+
+Pour encoder le certificat, dans PowerShell : `[Convert]::ToBase64String([IO.File]::ReadAllBytes("certificat.pfx")) | Set-Clipboard`, puis colle le contenu dans le secret. La signature est faite avant le calcul de l'empreinte SHA-256, donc l'empreinte publiée est celle du fichier signé. Sans ces secrets, l'exe est produit non signé et le résumé de l'exécution l'indique.
+
+Une signature n'efface pas toujours l'avertissement dès le premier jour : Windows tient aussi compte de la réputation du fichier. Un service de signature en ligne (Azure Trusted Signing) demanderait d'autres étapes dans le workflow, à ajouter le jour où le compte existe.

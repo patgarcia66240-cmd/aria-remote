@@ -18,6 +18,13 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
+    # Signature (facultative) : renseigne ces secrets dans GitHub › Settings › Secrets and variables › Actions pour que l'exe sorte SIGNÉ.
+    #   WINDOWS_CERT_PFX_BASE64 : le certificat de signature de code (.pfx), encodé en base64
+    #   WINDOWS_CERT_PASSWORD   : son mot de passe
+    # Sans ces secrets, l'exe est produit non signé (SmartScreen affichera « Éditeur inconnu »). Voir remote-agent/README.md.
+    env:
+      WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+      WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
     defaults:
       run:
         working-directory: remote-agent
@@ -37,6 +44,28 @@ jobs:
 
       - name: Compilation (release)
         run: cargo build --release --locked
+
+      # La signature se fait AVANT l'empreinte : l'empreinte publiée est celle du fichier signé.
+      - name: Signature de l'exe
+        if: ${{ env.WINDOWS_CERT_PFX_BASE64 != '' }}
+        shell: pwsh
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'signature.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX_BASE64))
+          $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName -Descending | Select-Object -First 1).FullName
+          & $signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /f $pfx /p $env:WINDOWS_CERT_PASSWORD target/release/remote-agent.exe
+          if ($LASTEXITCODE -ne 0) { throw "La signature a échoué" }
+          & $signtool verify /pa /v target/release/remote-agent.exe
+          if ($LASTEXITCODE -ne 0) { throw "La signature n'est pas valide" }
+          Remove-Item $pfx -Force
+          "### Signature`nL'exe est signé." | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+
+      - name: Signature absente
+        if: ${{ env.WINDOWS_CERT_PFX_BASE64 == '' }}
+        shell: pwsh
+        run: |
+          Write-Host "Aucun certificat configuré : l'exe est produit non signé."
+          "### Signature`nExe NON signé (aucun certificat configuré)." | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
 
       - name: Empreinte SHA-256
         shell: pwsh
