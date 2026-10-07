@@ -20,7 +20,7 @@ use crate::network::webrtc::Peer;
 use crate::capture::Screens;
 use crate::clipboard::SystemClipboard;
 use crate::session::{attach_channel, Session, SharedClipboard, SharedInput};
-use crate::ui::{now_ms, ConsentInfo, SessionInfo, Ui, UiCommand};
+use crate::ui::{self, now_ms, ConsentInfo, SessionInfo, Ui, UiCommand};
 
 /// Le serveur abandonne une demande restée sans réponse au bout de 60 s : au-delà, on la retire aussi ici.
 const CONSENT_TIMEOUT: Duration = Duration::from_secs(65);
@@ -373,6 +373,7 @@ impl Agent {
                     peer.close().await;
                 }
                 self.ui(|s| s.session = None);
+                ui::minimize_window(false);
             }
             None => self.log("aucune session en cours"),
         }
@@ -572,6 +573,7 @@ impl Agent {
         active.peer = Some(peer);
         self.active = Some(active);
         self.ui(move |s| s.session = Some(info));
+        ui::minimize_window(true);
         self.log(format!("session {session_id} : négociation envoyée"));
         Ok(())
     }
@@ -588,6 +590,7 @@ impl Agent {
                 }
             }
             self.ui(|s| s.session = None);
+            ui::minimize_window(false);
             self.log("session terminée");
         }
     }

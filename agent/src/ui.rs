@@ -23,6 +23,9 @@ use tokio::sync::mpsc::UnboundedSender;
 const PAGE: &str = include_str!("../ui/index.html");
 const MAX_EVENTS: usize = 12;
 /// La fenêtre est « vue » si elle a interrogé l'agent il y a moins de 3 s en se disant visible (les onglets cachés ralentissent leurs minuteries).
+/// Titre de la page ui/index.html, donc de la fenêtre d'application.
+#[cfg_attr(not(windows), allow(dead_code))]
+const WINDOW_TITLE: &str = "ARIA Remote";
 const VISIBLE_WITHIN: Duration = Duration::from_secs(3);
 
 /// Ordres donnés par la fenêtre à l'agent.
@@ -247,6 +250,29 @@ pub async fn start(commands: UnboundedSender<UiCommand>, initial: UiState) -> an
         let _ = axum::serve(listener, app).await;
     });
     Ok(ui)
+}
+
+/// Réduit la fenêtre de l'agent pendant une session (elle ne gêne plus l'écran partagé), la rétablit sans lui voler le focus à la fin.
+/// Réduite, pas masquée : elle reste dans la barre des tâches, d'où la personne devant l'appareil peut couper la session. Sans effet hors Windows.
+pub fn minimize_window(minimize: bool) {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Foundation::{BOOL, HWND, LPARAM};
+        use windows_sys::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowTextW, IsIconic, IsWindowVisible, ShowWindow, SW_MINIMIZE, SW_SHOWNOACTIVATE};
+
+        unsafe extern "system" fn visit(hwnd: HWND, minimize: LPARAM) -> BOOL {
+            let mut title = [0u16; 64];
+            let len = GetWindowTextW(hwnd, title.as_mut_ptr(), title.len() as i32).max(0) as usize;
+            // Fenêtre d'application Edge/Chrome : son titre est celui de la page (ui/index.html). Une fenêtre réduite reste « visible » pour Windows : on teste IsIconic.
+            if String::from_utf16_lossy(&title[..len]) == WINDOW_TITLE && IsWindowVisible(hwnd) != 0 && (minimize != 0) != (IsIconic(hwnd) != 0) {
+                ShowWindow(hwnd, if minimize != 0 { SW_MINIMIZE } else { SW_SHOWNOACTIVATE });
+            }
+            1
+        }
+        unsafe { EnumWindows(Some(visit), LPARAM::from(minimize)); }
+    }
+    #[cfg(not(windows))]
+    let _ = minimize;
 }
 
 /// Ouvre la fenêtre : Edge ou Chrome en mode application (fenêtre sans barre d'adresse, comme un vrai logiciel) ; sinon le navigateur par défaut.
