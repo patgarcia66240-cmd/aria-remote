@@ -43,6 +43,7 @@ pub fn parse_windows(output: &str) -> (Vec<u32>, bool) {
 }
 
 /// Macs : le modèle (« MacBookPro18,3 », « Macmini9,1 »...) dit tout.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn kind_from_mac_model(model: &str) -> Kind {
     let model = model.to_ascii_lowercase();
     if model.contains("book") { Kind::Laptop } else if model.contains("mini") { Kind::Mini } else { Kind::Desktop }

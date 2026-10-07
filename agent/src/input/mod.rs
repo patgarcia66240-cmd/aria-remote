@@ -66,9 +66,25 @@ impl Control {
     }
 }
 
+/// Zone de l'écran contrôlé, en pixels du bureau virtuel : les coordonnées 0..1 du contrôleur y sont rapportées (écran choisi, pas forcément le principal).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Area {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+}
+
 /// Ce que l'agent sait faire sur l'appareil. Implémenté pour Windows (enigo) ; ailleurs, une version qui journalise.
 pub trait InputSink: Send {
     fn display_size(&self) -> (u32, u32);
+    /// Zone contrôlée : celle choisie avec `set_area`, sinon l'écran principal à l'origine.
+    fn area(&self) -> Area {
+        let (width, height) = self.display_size();
+        Area { x: 0, y: 0, width, height }
+    }
+    /// Choisit l'écran sur lequel s'appliquent les coordonnées du contrôleur.
+    fn set_area(&mut self, _area: Area) {}
     /// Position actuelle du pointeur en pixels (le contrôleur la dessine : la capture d'écran ne contient pas le curseur).
     fn cursor(&self) -> Option<(i32, i32)> { None }
     fn move_to(&mut self, x: i32, y: i32);
@@ -82,15 +98,19 @@ pub fn apply(message: &Control, allowed: &HashSet<Permission>, sink: &mut dyn In
     if !allowed.contains(&message.required()) {
         return Err("permission refusée");
     }
-    let (width, height) = sink.display_size();
+    let area = sink.area();
+    let to_screen = |x: f64, y: f64| {
+        let (px, py) = mouse::to_pixels(x, y, area.width, area.height);
+        (area.x.saturating_add(px), area.y.saturating_add(py))
+    };
     match message {
         Control::Move { x, y } => {
-            let (px, py) = mouse::to_pixels(*x, *y, width, height);
+            let (px, py) = to_screen(*x, *y);
             sink.move_to(px, py);
         }
         Control::Down { x, y, button } | Control::Up { x, y, button } => {
             let down = matches!(message, Control::Down { .. });
-            let (px, py) = mouse::to_pixels(*x, *y, width, height);
+            let (px, py) = to_screen(*x, *y);
             sink.move_to(px, py);
             sink.button(mouse::Button::from_dom(*button).ok_or("bouton inconnu")?, down);
         }
@@ -106,18 +126,19 @@ pub struct LogInput {
     pub log: Vec<String>,
     echo: bool,
     pointer: Option<(i32, i32)>,
+    area: Option<Area>,
 }
 
 #[cfg_attr(windows, allow(dead_code))]
 impl LogInput {
     #[cfg(test)]
     pub fn new() -> Self {
-        Self { log: Vec::new(), echo: false, pointer: None }
+        Self { log: Vec::new(), echo: false, pointer: None, area: None }
     }
 
     /// Affiche chaque action sur la sortie d'erreur : on voit ce que le contrôleur ferait sur un vrai appareil.
     pub fn echoing() -> Self {
-        Self { log: Vec::new(), echo: true, pointer: None }
+        Self { log: Vec::new(), echo: true, pointer: None, area: None }
     }
 
     fn record(&mut self, line: String) {
@@ -131,6 +152,8 @@ impl LogInput {
 #[cfg_attr(windows, allow(dead_code))]
 impl InputSink for LogInput {
     fn display_size(&self) -> (u32, u32) { (1280, 720) }
+    fn area(&self) -> Area { self.area.unwrap_or(Area { x: 0, y: 0, width: 1280, height: 720 }) }
+    fn set_area(&mut self, area: Area) { self.area = Some(area); }
     fn cursor(&self) -> Option<(i32, i32)> { self.pointer }
     fn move_to(&mut self, x: i32, y: i32) { self.pointer = Some((x, y)); self.record(format!("move {x},{y}")); }
     fn button(&mut self, button: mouse::Button, down: bool) { self.record(format!("button {button:?} {down}")); }
@@ -177,6 +200,28 @@ mod tests {
         assert_eq!(sink.cursor(), None);
         apply(&parse(r#"{"t":"move","x":0.25,"y":0.5}"#), &mouse, &mut sink).unwrap();
         assert_eq!(sink.cursor(), Some((320, 360)));
+    }
+
+    #[test]
+    fn coordinates_are_relative_to_the_chosen_screen() {
+        let mut sink = LogInput::new();
+        let mouse = HashSet::from([Permission::ViewScreen, Permission::ControlMouse]);
+        sink.set_area(Area { x: 1280, y: 0, width: 800, height: 600 });
+        apply(&parse(r#"{"t":"move","x":0.5,"y":0.5}"#), &mouse, &mut sink).unwrap();
+        apply(&parse(r#"{"t":"down","x":0,"y":0,"button":0}"#), &mouse, &mut sink).unwrap();
+        apply(&parse(r#"{"t":"move","x":1,"y":1}"#), &mouse, &mut sink).unwrap();
+        assert_eq!(sink.log, vec!["move 1680,300", "move 1280,0", "button Left true", "move 2079,599"]);
+        // un écran placé à gauche de l'écran principal a des coordonnées négatives
+        sink.set_area(Area { x: -1920, y: -200, width: 1920, height: 1080 });
+        apply(&parse(r#"{"t":"move","x":0,"y":0}"#), &mouse, &mut sink).unwrap();
+        assert_eq!(sink.log.last().unwrap(), "move -1920,-200");
+        assert_eq!(sink.area(), Area { x: -1920, y: -200, width: 1920, height: 1080 });
+    }
+
+    #[test]
+    fn without_a_chosen_screen_the_primary_display_is_used() {
+        let sink = LogInput::new();
+        assert_eq!(sink.area(), Area { x: 0, y: 0, width: 1280, height: 720 });
     }
 
     #[test]

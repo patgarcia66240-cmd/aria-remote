@@ -156,7 +156,7 @@
     <h2>Ce que le contrôleur peut faire</h2>
     <div class="row"><span class="pi"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></span><div class="rt"><b>Voir l'écran</b><p>Toujours autorisé pendant une session acceptée</p></div><label class="switch"><input type="checkbox" checked disabled><i></i></label></div>
     <div class="row"><span class="pi"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 3 6.5 16 2.3-6.7L20.5 10 5 3Z"/><path d="m14 14 5 5"/></svg></span><div class="rt"><b>Utiliser la souris</b><p>Déplacer le pointeur, cliquer, faire défiler</p></div><label class="switch"><input type="checkbox" id="allow-mouse"><i></i></label></div>
-    <div class="row"><span class="pi"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></span><div class="rt"><b>Utiliser le clavier</b><p>Taper du texte et des raccourcis</p></div><label class="switch"><input type="checkbox" id="allow-keyboard"><i></i></label></div>
+    <div class="row"><span class="pi"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></span><div class="rt"><b>Utiliser le clavier</b><p>Taper du texte et des raccourcis, partager le presse-papiers</p></div><label class="switch"><input type="checkbox" id="allow-keyboard"><i></i></label></div>
   </section>
 
   <section class="card" id="problem" hidden>
@@ -199,7 +199,7 @@ const params = new URLSearchParams(location.search)
 const TOKEN = params.get('t') || sessionStorage.getItem('t') || ''
 if (params.get('t')) { sessionStorage.setItem('t', TOKEN); history.replaceState(null, '', location.pathname) }
 
-const LABEL = { view_screen: 'Voir l\'écran', control_mouse: 'Souris', control_keyboard: 'Clavier' }
+const LABEL = { view_screen: 'Voir l\'écran', control_mouse: 'Souris', control_keyboard: 'Clavier et presse-papiers' }
 const LINK = { connecting: ['warn', 'Connexion…'], unpaired: ['warn', 'À appairer'], online: ['ok', 'En ligne'], error: ['bad', 'Hors ligne'], setup: ['warn', 'À configurer'] }
 let state = null, editingSetup = false, dirty = { allow: 0 }
 

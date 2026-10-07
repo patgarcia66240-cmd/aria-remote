@@ -1,6 +1,7 @@
 // Interface d'ARIA Remote Desktop. Tout passe par les commandes Rust (clé du contrôleur, appels réseau) : la page ne voit jamais la clé.
 import { KINDS, guessKind, loadKinds, machineSvg, saveKind } from './machines.js'
 import { createRequest, keyMessage, openSession, pointerMessage, wheelMessage } from './session.js'
+import { AutoQuality, ClipboardSync, FpsMeter, LatencyMeter, PRESETS, PRESET_ORDER, SHORTCUTS, latencyTone, screenLabel, shortcutMessages, streamMessage, stuckKeys } from './tools.js'
 
 const $ = (id) => document.getElementById(id)
 const invoke = window.__TAURI__?.core?.invoke
@@ -28,6 +29,7 @@ let timer = null
 const off = new Map()        // appareil -> permissions désactivées par la personne (tout est activé par défaut)
 let connecting = null        // { id, state } pendant l'attente d'acceptation
 let live = null              // { link, device, permissions }
+let tools = null             // outils de la session en cours (mesures, qualité, presse-papiers)
 let selectedId = null        // appareil montré dans l'aperçu du bas de la carte
 const kinds = loadKinds()    // type de machine choisi par appareil (bureau, mini PC, portable)
 
@@ -70,7 +72,7 @@ function render() {
   const inSession = !needSetup && !!live
   document.body.classList.toggle('live', inSession)
   show($('sub-idle'), !inSession); show($('sub-live'), inSession)
-  show($('v-caps'), inSession); show($('disconnect'), inSession)
+  show($('v-caps'), inSession); show($('v-tools'), inSession); show($('disconnect'), inSession)
   if (inSession) pill(null, '')
   show($('cancel-settings'), settings.configured)
   $('key-opt').textContent = settings.configured ? '(laisse vide pour garder la clé enregistrée)' : ''
@@ -234,19 +236,21 @@ $('pair-form').addEventListener('submit', async (event) => {
 async function connectTo(device) {
   const permissions = ['view_screen', ...chosenPermissions(device).map((p) => p.id)]
   connecting = { id: device.device_id, state: 'asking' }
+  tools = makeTools()
   showError($('list-err'), '')
   renderDevices()
   try {
     const link = await openSession({
       deviceId: device.device_id, permissions, request,
       onState: (state) => { if (connecting) { connecting.state = state; renderDevices() } else { viewerState(state) } },
-      onInfo: viewerInfo, onFrame: drawFrame, onCursor: moveCursor,
+      onInfo: onControl, onFrame: drawFrame, onCursor: moveCursor,
     })
     live = { link, device, permissions }
     connecting = null
     openViewer()
   } catch (error) {
     connecting = null
+    tools = null
     showError($('list-err'), message(error))
     renderDevices()
   }
@@ -258,18 +262,249 @@ function viewerState(state) {
   $('v-state').className = 'status' + (state === 'connected' ? ' good' : state === 'lost' ? ' bad' : '')
 }
 
-function viewerInfo(info) {
-  if (!info?.width || !info?.height) return
-  $('stage').style.setProperty('--ratio', (info.width / info.height).toFixed(4))
-  $('v-size').textContent = `${info.width}×${info.height}`
+// --- Outils de la session -------------------------------------------------------------------------------------------------
+
+const pref = (key, fallback) => { try { return localStorage.getItem('aria-remote-' + key) ?? fallback } catch { return fallback } }
+const setPref = (key, value) => { try { localStorage.setItem('aria-remote-' + key, value) } catch { /* stockage indisponible : le choix vaut pour cette session */ } }
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+function makeTools() {
+  return {
+    features: new Set(), screens: [], screen: 0, infoSeen: false, started: false, timers: [], clipTimer: null, sync: null, lastToast: 0,
+    latency: new LatencyMeter(), fps: new FpsMeter(), lastFps: null,
+    quality: pref('quality', 'auto'), auto: new AutoQuality('balanced'),
+    clipOn: pref('clip', '1') === '1',
+  }
 }
 
-async function drawFrame(data) {
+let toastTimer = null
+function toast(text, tone = '') {
+  const node = $('toast')
+  node.textContent = text
+  node.className = 'toast' + (tone ? ` ${tone}` : '')
+  show(node, true)
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => show(node, false), tone === 'bad' ? 6000 : 3500)
+}
+
+/** Messages de l'agent sur le canal « control » (tout sauf la position du curseur). */
+function onControl(msg) {
+  if (!tools || !msg) return
+  switch (msg.t) {
+    case 'info': return applyInfo(msg)
+    case 'pong': return onPong(msg.id)
+    case 'clip': return receiveClipboard(msg.text)
+    case 'denied': {
+      if (Date.now() - tools.lastToast > 4000) { tools.lastToast = Date.now(); toast(`L'appareil a refusé : ${msg.reason || 'commande non autorisée'}`, 'bad') }
+      return undefined
+    }
+    default: return undefined
+  }
+}
+
+function applyInfo(info) {
+  if (info.width && info.height) {
+    $('stage').style.setProperty('--ratio', (info.width / info.height).toFixed(4))
+    $('v-size').textContent = `${info.width}×${info.height}`
+  }
+  tools.features = new Set(info.features || [])
+  tools.screens = info.screens || []
+  tools.screen = info.screen ?? 0
+  tools.infoSeen = true
+  refreshToolbar()
+  startTools()
+}
+
+function refreshToolbar() {
+  if (!live || !tools) return
+  const keyboard = live.permissions.includes('control_keyboard')
+  show($('t-quality'), tools.features.has('stream'))
+  show($('t-screens'), tools.features.has('screens') && tools.screens.length > 1)
+  show($('t-shortcuts'), keyboard)
+  show($('t-clip'), keyboard && tools.features.has('clipboard'))
+  $('t-clip').setAttribute('aria-pressed', String(tools.clipOn))
+  $('t-clip').title = tools.clipOn ? 'Presse-papiers partagé : activé' : 'Presse-papiers partagé : désactivé'
+  const preset = currentPreset()
+  $('t-quality').title = `Qualité de l'image : ${tools.quality === 'auto' ? `auto (${preset.label})` : preset.label}`
+}
+
+const currentPreset = () => (tools.quality === 'auto' ? tools.auto.preset : PRESETS[tools.quality] || PRESETS.balanced)
+const sendToDevice = (message_) => live?.link.sendInput(message_)
+
+/** Démarre les mesures et les échanges réguliers, une fois la session ouverte ET les fonctions de l'agent connues. */
+function startTools() {
+  if (!tools || tools.started || !live || !tools.infoSeen) return
+  tools.started = true
+  const every = (ms, fn) => tools.timers.push(setInterval(fn, ms))
+  applyQuality()
+  every(1000, tickFps)
+  if (tools.features.has('ping')) { pingNow(); every(2000, pingNow) }
+  if (tools.features.has('stream')) every(3000, autoSample)
+  startClipboard()
+  refreshToolbar()
+}
+
+function stopTools() {
+  tools?.timers.forEach(clearInterval)
+  clearInterval(tools?.clipTimer)
+  tools = null
+  show($('v-stats'), false)
+  closeMenu()
+}
+
+function pingNow() { sendToDevice(tools.latency.ping(performance.now())) }
+
+function onPong(id) {
+  if (tools.latency.pong(id, performance.now()) !== null) updateStats()
+}
+
+function tickFps() {
+  const value = tools.fps.tick(performance.now())
+  if (value !== null) { tools.lastFps = value; $('v-fps').textContent = `${value} i/s` }
+  updateStats()
+}
+
+function updateStats() {
+  const average = tools.latency.average
+  $('v-lat').textContent = average === null ? '' : `${average} ms`
+  $('v-stats').dataset.tone = latencyTone(average)
+  show($('v-stats'), average !== null || tools.lastFps !== null)
+}
+
+function applyQuality() {
+  if (tools.features.has('stream')) sendToDevice(streamMessage(currentPreset()))
+  refreshToolbar()
+}
+
+function autoSample() {
+  if (tools.quality !== 'auto' || tools.lastFps === null) return
+  const next = tools.auto.sample({ rtt: tools.latency.average, fps: tools.lastFps })
+  if (next) { applyQuality(); toast(`Qualité ajustée automatiquement : ${next.label}`) }
+}
+
+// Presse-papiers partagé (texte) : ce qui est copié d'un côté devient collable de l'autre, tant que l'icône est activée.
+async function startClipboard() {
+  clearInterval(tools.clipTimer)
+  if (!tools.clipOn || !live.permissions.includes('control_keyboard') || !tools.features.has('clipboard')) return
+  const mine = tools
+  mine.sync = new ClipboardSync(await invoke('clipboard_read').catch(() => null))
+  if (tools !== mine) return
+  mine.clipTimer = setInterval(async () => {
+    const text = mine.sync.changed(await invoke('clipboard_read').catch(() => null))
+    if (text && tools === mine) { sendToDevice({ t: 'clip', text }); toast('Texte copié envoyé à l\'appareil') }
+  }, 1000)
+}
+
+function receiveClipboard(text) {
+  if (!tools.clipOn || !tools.sync) return
+  const accepted = tools.sync.received(text)
+  if (accepted) invoke('clipboard_write', { text: accepted }).then(() => toast('Texte copié reçu de l\'appareil')).catch(() => {})
+}
+
+async function sendShortcut(id) {
+  const sent = []
+  try {
+    for (const key of shortcutMessages(id)) { sendToDevice(key); sent.push(key); await sleep(25) }
+  } finally {
+    for (const key of stuckKeys(sent)) sendToDevice(key)       // jamais de touche restée enfoncée à distance
+  }
+}
+
+async function capture() {
   const canvas = $('screen')
+  if (!live || !canvas.width || !invoke) return
+  try {
+    const blob = await new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('image vide'))), 'image/png'))
+    const dataUrl = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(blob) })
+    const path = await invoke('save_capture', { pngBase64: String(dataUrl).split(',')[1], device: live.device.name })
+    toast(`Capture enregistrée : ${path}`)
+  } catch (error) {
+    toast(`Capture impossible : ${message(error)}`, 'bad')
+  }
+}
+
+// --- Menus et plein écran -----------------------------------------------------------------------------------------------
+
+let menu = null
+function closeMenu() {
+  if (!menu) return
+  menu.node.remove()
+  menu.anchor.setAttribute('aria-expanded', 'false')
+  document.removeEventListener('pointerdown', menu.outside, true)
+  document.removeEventListener('keydown', menu.key, true)
+  menu = null
+}
+
+/** Menu sous un bouton de l'en-tête. items : { head } | { note } | { label, hint, checked, run }. */
+function openMenu(anchor, items) {
+  const wasOpen = menu?.anchor === anchor
+  closeMenu()
+  if (wasOpen) return
+  const node = el('div', 'menu')
+  node.setAttribute('role', 'menu')
+  for (const item of items) {
+    if (item.head) { node.append(el('div', 'menu-head', item.head)); continue }
+    if (item.note) { node.append(el('div', 'menu-note', item.note)); continue }
+    const row = el('button', 'menu-item')
+    row.type = 'button'
+    row.setAttribute('role', item.checked === undefined ? 'menuitem' : 'menuitemradio')
+    if (item.checked !== undefined) { row.setAttribute('aria-checked', String(item.checked)); row.append(icon('i-check', 'tick')) }
+    const text = el('span', 'txt')
+    text.append(el('span', '', item.label))
+    if (item.hint) text.append(el('span', 'hint', item.hint))
+    row.append(text)
+    row.onclick = () => { closeMenu(); canvas.focus(); item.run() }
+    node.append(row)
+  }
+  document.body.append(node)
+  const box = anchor.getBoundingClientRect()
+  node.style.top = `${box.bottom + 8}px`
+  node.style.right = `${Math.max(8, window.innerWidth - box.right)}px`
+  anchor.setAttribute('aria-expanded', 'true')
+  menu = {
+    node, anchor,
+    outside: (event) => { if (!node.contains(event.target) && !anchor.contains(event.target)) closeMenu() },
+    key: (event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeMenu(); canvas.focus() } },
+  }
+  document.addEventListener('pointerdown', menu.outside, true)
+  document.addEventListener('keydown', menu.key, true)
+  node.querySelector('button')?.focus()
+}
+
+let fullscreen = false
+async function setFullscreen(on) {
+  try {
+    const window_ = window.__TAURI__?.window?.getCurrentWindow?.()
+    if (window_) await window_.setFullscreen(on)
+    else if (on) await document.documentElement.requestFullscreen()
+    else if (document.fullscreenElement) await document.exitFullscreen()
+  } catch { /* plein écran refusé : on reste en fenêtre */ return }
+  fullscreen = on
+  document.body.classList.toggle('fullscreen', on)
+  $('t-full').querySelector('use').setAttribute('href', on ? '#i-shrink' : '#i-expand')
+  $('t-full').title = on ? 'Quitter le plein écran (F11)' : 'Plein écran (F11)'
+  $('t-full').setAttribute('aria-label', $('t-full').title)
+  if (!on) document.querySelector('header').classList.remove('peek')
+  if (on) toast('Plein écran : F11 pour quitter, ou place la souris en haut de l\'écran pour retrouver la barre.')
+}
+
+let peekTimer = null
+function peek(on) {
+  clearTimeout(peekTimer)
+  const header = document.querySelector('header')
+  if (on) header.classList.add('peek')
+  else peekTimer = setTimeout(() => { if (!menu) header.classList.remove('peek') }, 700)
+}
+
+// --- Écran distant ----------------------------------------------------------------------------------------------------
+
+async function drawFrame(data) {
+  const canvas_ = $('screen')
   const bitmap = await createImageBitmap(new Blob([data], { type: 'image/jpeg' }))
-  if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) { canvas.width = bitmap.width; canvas.height = bitmap.height }
-  canvas.getContext('2d').drawImage(bitmap, 0, 0)
+  if (canvas_.width !== bitmap.width || canvas_.height !== bitmap.height) { canvas_.width = bitmap.width; canvas_.height = bitmap.height }
+  canvas_.getContext('2d').drawImage(bitmap, 0, 0)
   bitmap.close?.()
+  tools?.fps.hit()
 }
 
 function moveCursor({ x, y }) {
@@ -283,25 +518,31 @@ function moveCursor({ x, y }) {
 function openViewer() {
   const { device, permissions } = live
   $('v-name').textContent = device.name
-  $('v-size').textContent = ''
   $('cursor').style.opacity = '0'
+  $('v-lat').textContent = ''
+  $('v-fps').textContent = ''
   const caps = $('v-caps')
   caps.replaceChildren(...PERMISSIONS.map((p) => {
     const on = permissions.includes(p.id)
     const badge = el('span', 'badge' + (on ? ' on' : ''))
-    badge.title = `${p.label} : ${on ? 'oui' : 'non'}`
-    badge.append(icon(p.icon), p.label)
+    badge.title = `${p.label} : ${on ? 'activée' : 'désactivée'}`
+    badge.setAttribute('aria-label', badge.title)
+    badge.append(icon(p.icon))
     return badge
   }))
   $('v-hint').textContent = permissions.includes('control_keyboard') ? 'Clique sur l\'écran pour envoyer le clavier à l\'appareil.' : ''
   viewerState('connected')
   render()
-  $('screen').focus()
+  refreshToolbar()
+  startTools()
+  canvas.focus()
 }
 
 async function disconnect() {
   const current = live
   live = null
+  stopTools()
+  if (fullscreen) await setFullscreen(false)
   pill(null, '')
   await current?.link.close()
   render()
@@ -329,8 +570,40 @@ canvas.addEventListener('pointerdown', (event) => {
 canvas.addEventListener('pointerup', (event) => { if (can('control_mouse')) send(pointerMessage('up', event, canvas)) })
 canvas.addEventListener('wheel', (event) => { if (can('control_mouse')) { event.preventDefault(); send(wheelMessage(event)) } }, { passive: false })
 canvas.addEventListener('contextmenu', (event) => event.preventDefault())
-canvas.addEventListener('keydown', (event) => { if (can('control_keyboard')) { event.preventDefault(); send(keyMessage(event, true)) } })
-canvas.addEventListener('keyup', (event) => { if (can('control_keyboard')) { event.preventDefault(); send(keyMessage(event, false)) } })
+// F11 reste à cette application (plein écran) : il n'est pas envoyé à l'appareil.
+canvas.addEventListener('keydown', (event) => { if (event.key !== 'F11' && can('control_keyboard')) { event.preventDefault(); send(keyMessage(event, true)) } })
+canvas.addEventListener('keyup', (event) => { if (event.key !== 'F11' && can('control_keyboard')) { event.preventDefault(); send(keyMessage(event, false)) } })
+window.addEventListener('keydown', (event) => { if (event.key === 'F11' && live) { event.preventDefault(); setFullscreen(!fullscreen) } })
+
+// Boutons de la barre d'outils.
+$('t-quality').addEventListener('click', (event) => {
+  const items = [{ head: 'Qualité de l\'image' }, { label: 'Auto', hint: `s'adapte à la connexion (actuellement ${tools.auto.preset.label.toLowerCase()})`, checked: tools.quality === 'auto', run: () => { tools.quality = 'auto'; setPref('quality', 'auto'); applyQuality() } }]
+  for (const id of PRESET_ORDER) {
+    const preset = PRESETS[id]
+    items.push({ label: preset.label, hint: `${preset.hint} · ${preset.fps} images/s`, checked: tools.quality === id, run: () => { tools.quality = id; setPref('quality', id); applyQuality() } })
+  }
+  openMenu(event.currentTarget, items)
+})
+$('t-screens').addEventListener('click', (event) => {
+  const items = [{ head: 'Écran à afficher' }, ...tools.screens.map((screen) => ({ label: screenLabel(screen, tools.screens.length), hint: screen.name, checked: screen.index === tools.screen, run: () => sendToDevice({ t: 'screen', index: screen.index }) }))]
+  openMenu(event.currentTarget, items)
+})
+$('t-shortcuts').addEventListener('click', (event) => {
+  const items = [{ head: 'Envoyer à l\'appareil' }, ...SHORTCUTS.map((shortcut) => ({ label: shortcut.label, hint: shortcut.hint, run: () => sendShortcut(shortcut.id) })), { note: 'Ctrl + Alt + Suppr est réservé à Windows : il ne peut pas être envoyé à distance.' }]
+  openMenu(event.currentTarget, items)
+})
+$('t-clip').addEventListener('click', () => {
+  tools.clipOn = !tools.clipOn
+  setPref('clip', tools.clipOn ? '1' : '0')
+  if (tools.clipOn) startClipboard(); else clearInterval(tools.clipTimer)
+  refreshToolbar()
+  toast(tools.clipOn ? 'Presse-papiers partagé : activé' : 'Presse-papiers partagé : désactivé')
+})
+$('t-shot').addEventListener('click', capture)
+$('t-full').addEventListener('click', () => setFullscreen(!fullscreen))
+$('hotzone').addEventListener('mouseenter', () => peek(true))
+document.querySelector('header').addEventListener('mouseenter', () => peek(true))
+document.querySelector('header').addEventListener('mouseleave', () => peek(false))
 
 // Fermer la fenêtre coupe la session : on ne laisse jamais un contrôle ouvert sans écran.
 window.addEventListener('beforeunload', () => { live?.link.close() })

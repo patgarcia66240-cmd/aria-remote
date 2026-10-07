@@ -5,6 +5,7 @@
 
 mod agent;
 mod capture;
+mod clipboard;
 mod config;
 mod identity;
 mod input;
@@ -14,7 +15,6 @@ mod session;
 mod ui;
 
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use anyhow::Result;
 use clap::Parser;
@@ -108,7 +108,7 @@ async fn main() -> Result<()> {
         api_key,
         allow,
         auto_accept: cli.auto_accept,
-        source: Arc::new(capture::screen::default_source),
+        screens: capture::screen::default_screens(),
         input: Box::new(default_input),
         ui,
         config_path: path,

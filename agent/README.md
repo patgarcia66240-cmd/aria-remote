@@ -78,6 +78,20 @@ Le code d'appairage vaut 30 minutes par défaut ; réglable côté backend par `
 - Vérifié ici : `cargo test` (Linux) et `cargo check --target x86_64-pc-windows-gnu`. Le contrôle d'un vrai bureau Windows n'a **pas** été
   essayé : à valider sur un PC.
 
+## Canal « control » d'une session
+JSON dans les deux sens (le canal « frames » porte les images JPEG). L'agent applique les permissions de la session à chaque message.
+| Sens | Message | Permission |
+|---|---|---|
+| contrôleur → agent | `move` `down` `up` `wheel` (souris) · `key` (clavier) | souris / clavier |
+| contrôleur → agent | `ping{id}` → réponse `pong{id}` (latence) | aucune |
+| contrôleur → agent | `stream{fps?, quality?, width?}` (images par seconde 2–30, qualité JPEG 20–90, largeur 640–3840) | voir l'écran |
+| contrôleur → agent | `screen{index}` : écran à afficher et à piloter (la souris suit) | voir l'écran |
+| contrôleur → agent | `clip{text}` : texte à mettre dans le presse-papiers (256 Ko max) | clavier |
+| agent → contrôleur | `info{width, height, permissions, screens[], screen, features[]}` : à l'ouverture et à chaque changement d'écran | |
+| agent → contrôleur | `cursor{x, y}` (position 0..1 sur l'écran affiché) · `clip{text}` (texte copié sur l'appareil, permission clavier) · `denied{reason}` | |
+
+`features` (`ping`, `stream`, `screens`, `clipboard`) dit au contrôleur ce que cet agent sait faire ; `clipboard` n'y figure que si la session a la permission clavier.
+
 ## Sécurité
 
 - La **clé privée ne quitte jamais l'appareil** (fichier de configuration en 0600 sous Unix). Le serveur ne connaît que la clé publique.

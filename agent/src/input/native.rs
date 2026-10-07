@@ -4,15 +4,16 @@ use enigo::{Axis, Button as EButton, Coordinate, Direction, Enigo, Key, Keyboard
 
 use super::keyboard::{LogicalKey, Named};
 use super::mouse::Button;
-use super::InputSink;
+use super::{Area, InputSink};
 
 pub struct NativeInput {
     enigo: Enigo,
+    area: Option<Area>,
 }
 
 impl NativeInput {
     pub fn new() -> anyhow::Result<Self> {
-        Ok(Self { enigo: Enigo::new(&Settings::default())? })
+        Ok(Self { enigo: Enigo::new(&Settings::default())?, area: None })
     }
 }
 
@@ -48,6 +49,17 @@ fn named(key: Named) -> Key {
 impl InputSink for NativeInput {
     fn display_size(&self) -> (u32, u32) {
         self.enigo.main_display().map(|(w, h)| (w.max(1) as u32, h.max(1) as u32)).unwrap_or((1920, 1080))
+    }
+
+    fn area(&self) -> Area {
+        self.area.unwrap_or_else(|| {
+            let (width, height) = self.display_size();
+            Area { x: 0, y: 0, width, height }
+        })
+    }
+
+    fn set_area(&mut self, area: Area) {
+        self.area = Some(area);
     }
 
     fn cursor(&self) -> Option<(i32, i32)> {

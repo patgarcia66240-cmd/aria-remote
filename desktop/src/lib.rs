@@ -2,13 +2,18 @@
 //!
 //! Réglages (serveur + clé) et relais des appels vers le serveur de rendez-vous. La liste des appareils, l'appairage et la session
 //! (écran distant, souris, clavier, WebRTC) tournent dans la fenêtre (web/), qui passe par `api_request`.
+//! Le presse-papiers local et l'enregistrement des captures passent aussi par ici (la fenêtre n'a pas accès au système de fichiers).
 mod client;
 mod config;
+mod files;
 
 use client::Client;
 use config::Config;
 use serde::Serialize;
 use serde_json::Value;
+
+/// Même limite que l'agent : un texte plus gros n'est ni envoyé ni reçu.
+const CLIPBOARD_MAX_BYTES: usize = 256 * 1024;
 
 #[derive(Serialize)]
 struct Settings {
@@ -54,9 +59,34 @@ async fn api_request(method: String, path: String, body: Option<Value>) -> Resul
     saved_client()?.request(&method, &path, body).await
 }
 
+/// Texte du presse-papiers local (None s'il n'y en a pas ou s'il est trop gros pour être partagé).
+#[tauri::command]
+fn clipboard_read() -> Option<String> {
+    let text = arboard::Clipboard::new().ok()?.get_text().ok()?;
+    (text.len() <= CLIPBOARD_MAX_BYTES).then_some(text)
+}
+
+/// Met du texte dans le presse-papiers local (texte venu de l'appareil contrôlé).
+#[tauri::command]
+fn clipboard_write(text: String) -> Result<(), String> {
+    if text.len() > CLIPBOARD_MAX_BYTES {
+        return Err("Texte trop gros pour le presse-papiers.".into());
+    }
+    arboard::Clipboard::new().and_then(|mut clipboard| clipboard.set_text(text)).map_err(|_| "Presse-papiers indisponible.".to_string())
+}
+
+/// Enregistre une capture d'écran (PNG en base64) dans le dossier Images ; renvoie le chemin du fichier. Le nom est fabriqué ici, jamais choisi par la fenêtre.
+#[tauri::command]
+fn save_capture(png_base64: String, device: String) -> Result<String, String> {
+    let bytes = files::decode_png(&png_base64)?;
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let path = files::save_png(&files::captures_dir(), &files::capture_filename(&device, now), &bytes)?;
+    Ok(path.display().to_string())
+}
+
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![app_version, load_settings, save_settings, api_request])
+        .invoke_handler(tauri::generate_handler![app_version, load_settings, save_settings, api_request, clipboard_read, clipboard_write, save_capture])
         .run(tauri::generate_context!())
         .expect("échec du démarrage d'ARIA Remote Desktop");
 }

@@ -17,7 +17,9 @@ use crate::identity::{agent_auth_message, answer_message, Identity};
 use crate::input::{InputSink, Permission};
 use crate::network::signaling::{self, ClientMessage, IceServerConfig, ServerMessage, Socket};
 use crate::network::webrtc::Peer;
-use crate::session::{attach_channel, SharedInput, SourceFactory};
+use crate::capture::Screens;
+use crate::clipboard::SystemClipboard;
+use crate::session::{attach_channel, Session, SharedClipboard, SharedInput};
 use crate::ui::{now_ms, ConsentInfo, SessionInfo, Ui, UiCommand};
 
 /// Le serveur abandonne une demande restée sans réponse au bout de 60 s : au-delà, on la retire aussi ici.
@@ -28,7 +30,7 @@ pub struct Options {
     pub api_key: String,
     pub allow: HashSet<Permission>,
     pub auto_accept: bool,
-    pub source: SourceFactory,
+    pub screens: Screens,
     pub input: Box<dyn Fn() -> Result<Box<dyn InputSink>> + Send + Sync>,
     pub ui: Option<Ui>,
     pub config_path: PathBuf,
@@ -534,9 +536,11 @@ impl Agent {
 
         let input = self.shared_input()?;
         let permissions = Arc::new(active.plan.permissions.clone());
-        let source = self.options.source.clone();
+        // Une seule session partagée par les deux canaux (« frames » et « control ») : mêmes droits, mêmes réglages d'image, même écran.
+        let clipboard: SharedClipboard = Arc::new(Mutex::new(Box::new(SystemClipboard)));
+        let session = Session::new((*permissions).clone(), input, self.options.screens.clone(), clipboard);
         let on_channel: Arc<dyn Fn(Arc<webrtc::data_channel::RTCDataChannel>) + Send + Sync> =
-            Arc::new(move |channel| attach_channel(channel, permissions.clone(), input.clone(), source.clone()));
+            Arc::new(move |channel| attach_channel(channel, session.clone()));
         let ui = self.options.ui.clone();
         let on_state: Arc<dyn Fn(RTCPeerConnectionState) + Send + Sync> = Arc::new(move |state| {
             if let Some(ui) = &ui {

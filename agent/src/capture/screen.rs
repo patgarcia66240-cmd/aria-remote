@@ -1,11 +1,12 @@
 //! Sources d'écran et compression JPEG. Windows : écran principal via xcap. Ailleurs (développement, tests) : image synthétique animée.
 
 use std::io::Cursor;
+use std::sync::Arc;
 
 use anyhow::{bail, Result};
 use image::{codecs::jpeg::JpegEncoder, imageops::FilterType, DynamicImage, RgbImage, RgbaImage};
 
-use super::{Frame, ScreenSource};
+use super::{Frame, Screen, ScreenSource, Screens};
 
 pub const MAX_WIDTH: u32 = 1600;      // au-delà, l'image est réduite : le débit reste raisonnable sur une connexion domestique
 pub const JPEG_QUALITY: u8 = 55;
@@ -47,16 +48,31 @@ pub struct NativeScreen {
     monitor: xcap::Monitor,
 }
 
+/// Tous les écrans, triés de gauche à droite puis de haut en bas : le rang d'un écran est stable pendant la session.
 #[cfg(windows)]
-impl NativeScreen {
-    pub fn primary() -> Result<Self> {
-        let mut monitors = xcap::Monitor::all()?;
-        let index = monitors.iter().position(|m| m.is_primary().unwrap_or(false)).unwrap_or(0);
-        if index >= monitors.len() {
-            bail!("aucun écran détecté");
-        }
-        Ok(Self { monitor: monitors.swap_remove(index) })
+fn native_monitors() -> Vec<(xcap::Monitor, Screen)> {
+    let mut found: Vec<(xcap::Monitor, Screen)> = xcap::Monitor::all()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|m| {
+            let screen = Screen {
+                index: 0,
+                name: m.friendly_name().or_else(|_| m.name()).unwrap_or_else(|_| "Écran".to_string()),
+                x: m.x().unwrap_or(0),
+                y: m.y().unwrap_or(0),
+                width: m.width().unwrap_or(0),
+                height: m.height().unwrap_or(0),
+                primary: m.is_primary().unwrap_or(false),
+            };
+            (m, screen)
+        })
+        .filter(|(_, screen)| screen.width > 0 && screen.height > 0)
+        .collect();
+    found.sort_by_key(|(_, screen)| (screen.x, screen.y));
+    for (rank, (_, screen)) in found.iter_mut().enumerate() {
+        screen.index = rank;
     }
+    found
 }
 
 #[cfg(windows)]
@@ -67,15 +83,40 @@ impl ScreenSource for NativeScreen {
     }
 }
 
-/// Source d'écran de la plateforme, à créer DANS le thread de capture (certaines API d'écran ne sont pas transférables d'un thread à l'autre).
-pub fn default_source() -> Result<Box<dyn ScreenSource>> {
+/// Deux écrans de test (1280x720 principal, 800x600 à sa droite) : de quoi essayer le choix d'écran sans deuxième moniteur.
+#[cfg_attr(windows, allow(dead_code))]
+pub fn synthetic_screens() -> Vec<Screen> {
+    vec![
+        Screen { index: 0, name: "Écran de test 1".into(), x: 0, y: 0, width: 1280, height: 720, primary: true },
+        Screen { index: 1, name: "Écran de test 2".into(), x: 1280, y: 0, width: 800, height: 600, primary: false },
+    ]
+}
+
+/// Les écrans de la plateforme.
+pub fn default_screens() -> Screens {
     #[cfg(windows)]
     {
-        Ok(Box::new(NativeScreen::primary()?))
+        Screens {
+            list: Arc::new(|| native_monitors().into_iter().map(|(_, screen)| screen).collect()),
+            open: Arc::new(|index| {
+                let mut monitors = native_monitors();
+                if index >= monitors.len() {
+                    bail!("écran {index} introuvable");
+                }
+                Ok(Box::new(NativeScreen { monitor: monitors.swap_remove(index).0 }) as Box<dyn ScreenSource>)
+            }),
+        }
     }
     #[cfg(not(windows))]
     {
-        Ok(Box::new(SyntheticScreen::new(1280, 720)))
+        Screens {
+            list: Arc::new(synthetic_screens),
+            open: Arc::new(|index| {
+                let screens = synthetic_screens();
+                let Some(screen) = screens.get(index) else { bail!("écran {index} introuvable") };
+                Ok(Box::new(SyntheticScreen::new(screen.width, screen.height)) as Box<dyn ScreenSource>)
+            }),
+        }
     }
 }
 
