@@ -32,6 +32,8 @@ pub enum UiCommand {
     StopSession,
     SetAllow { mouse: bool, keyboard: bool },
     Configure { server: String, api_key: String },
+    /// Demande un NOUVEAU code d'appairage, même si l'appareil est déjà appairé (autre contrôleur, appareil retiré de la liste...).
+    NewPairingCode,
     Quit,
 }
 
@@ -213,6 +215,10 @@ async fn setup(State(ui): State<Ui>, Json(body): Json<SetupBody>) -> StatusCode 
     ack(ui.send(UiCommand::Configure { server: body.server, api_key: body.api_key }))
 }
 
+async fn new_pairing_code(State(ui): State<Ui>) -> StatusCode {
+    ack(ui.send(UiCommand::NewPairingCode))
+}
+
 async fn quit(State(ui): State<Ui>) -> StatusCode {
     ack(ui.send(UiCommand::Quit))
 }
@@ -225,6 +231,7 @@ pub fn router(ui: Ui) -> Router {
         .route("/api/stop", post(stop))
         .route("/api/allow", post(allow))
         .route("/api/setup", post(setup))
+        .route("/api/pairing-code", post(new_pairing_code))
         .route("/api/quit", post(quit))
         .layer(middleware::from_fn_with_state(ui.clone(), guard))
         .with_state(ui)
@@ -364,12 +371,13 @@ mod tests {
         let (ui, mut rx, app) = setup();
         let post = |path: &'static str, body: &'static str| request("POST", path, "127.0.0.1:4242", Some(Box::leak(ui.token.clone().into_boxed_str())), body);
         for (path, body) in [("/api/stop", "{}"), ("/api/allow", r#"{"mouse":true,"keyboard":false}"#),
-                             ("/api/setup", r#"{"server":"192.168.1.20:8000","api_key":"k"}"#), ("/api/quit", "{}")] {
+                             ("/api/setup", r#"{"server":"192.168.1.20:8000","api_key":"k"}"#), ("/api/pairing-code", "{}"), ("/api/quit", "{}")] {
             assert_eq!(app.clone().oneshot(post(path, body)).await.unwrap().status(), StatusCode::NO_CONTENT);
         }
         assert_eq!(rx.try_recv().unwrap(), UiCommand::StopSession);
         assert_eq!(rx.try_recv().unwrap(), UiCommand::SetAllow { mouse: true, keyboard: false });
         assert_eq!(rx.try_recv().unwrap(), UiCommand::Configure { server: "192.168.1.20:8000".into(), api_key: "k".into() });
+        assert_eq!(rx.try_recv().unwrap(), UiCommand::NewPairingCode);
         assert_eq!(rx.try_recv().unwrap(), UiCommand::Quit);
         assert_eq!(app.oneshot(post("/api/consent", "pas du json")).await.unwrap().status(), StatusCode::BAD_REQUEST);
     }

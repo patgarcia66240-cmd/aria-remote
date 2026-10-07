@@ -193,22 +193,33 @@ impl Agent {
 
     /// Appareil pas encore appairé : demande (ou renouvelle) un code et l'affiche dans la fenêtre et la console.
     async fn show_pairing_code(&mut self) {
+        self.issue_pairing_code(true).await;
+    }
+
+    /// Demande un code au serveur et l'affiche. `waiting` : l'appareil attend d'être appairé (état « unpaired ») ; sinon (code demandé à la main
+    /// pour un appareil déjà en ligne) l'état de la liaison ne change pas et une erreur n'est que journalisée.
+    async fn issue_pairing_code(&mut self, waiting: bool) {
         if self.pairing_until.map_or(true, |until| Instant::now() >= until) {
             match signaling::register(&self.options.server, &self.options.api_key, &self.config, &self.identity).await {
                 Ok((code, ttl)) => {
                     self.pairing_until = Some(Instant::now() + Duration::from_secs(ttl.saturating_sub(10)));
-                    println!("\n  Code d'appairage : {code}\n  Saisis-le dans PC Assistant (Ordinateur > Maintenance à distance). Il vaut {} minutes.\n", ttl / 60);
+                    println!("\n  Code d'appairage : {code}\n  Saisis-le dans ARIA Remote (application de bureau) ou dans ARIA (Ordinateur > Maintenance à distance). Il vaut {} minutes.\n", ttl / 60);
                     let expires = now_ms() + ttl * 1000;
                     self.ui(move |s| {
                         s.pairing_code = Some(code);
                         s.pairing_expires_ms = Some(expires);
                     });
-                    self.set_link("unpaired", "");
-                    self.log("en attente de l'appairage : saisis le code dans PC Assistant");
+                    if waiting {
+                        self.set_link("unpaired", "");
+                        self.log("en attente de l'appairage : saisis le code dans ARIA Remote");
+                    } else {
+                        self.log("nouveau code d'appairage : saisis-le dans ARIA Remote");
+                    }
                 }
-                Err(error) => self.set_link("error", format!("{error:#}")),
+                Err(error) if waiting => self.set_link("error", format!("{error:#}")),
+                Err(error) => self.log(format!("code d'appairage impossible : {error:#}")),
             }
-        } else {
+        } else if waiting {
             self.set_link("unpaired", "");
         }
     }
@@ -333,6 +344,10 @@ impl Agent {
                 }
                 None => self.log("adresse invalide : saisis par exemple 192.168.1.20:8000"),
             },
+            UiCommand::NewPairingCode => {
+                self.pairing_until = None;
+                self.issue_pairing_code(false).await;
+            }
             UiCommand::Quit => {
                 self.stop_active(out).await;
                 return Flow::Quit;

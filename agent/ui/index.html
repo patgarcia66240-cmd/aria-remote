@@ -131,7 +131,7 @@
   <section class="card center" id="pair" hidden>
     <h2>Code d'appairage</h2>
     <div class="code" id="code"></div>
-    <p class="hint">Saisis ce code dans PC Assistant :<br><b>Ordinateur › Maintenance à distance › Code d'appairage</b></p>
+    <p class="hint">Saisis ce code dans <b>ARIA Remote</b> (application de bureau),<br>ou dans ARIA : <b>Ordinateur › Maintenance à distance</b></p>
     <p class="hint" id="code-timer"></p>
     <div class="actions"><button class="ghost" id="copy-code">Copier le code</button></div>
   </section>
@@ -139,6 +139,8 @@
   <!-- Prêt -->
   <section class="card" id="ready" hidden>
     <div class="ready"><div class="ico"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.6 3.1 8.2 7.5 9.5 4.4-1.3 7.5-4.9 7.5-9.5V6L12 3Z"/><path d="m8.8 12.2 2.2 2.2 4.2-4.6"/></svg></div><div><div class="big">Prêt à être contrôlé</div><p class="hint" style="margin:0">Appareil appairé et en ligne. Chaque prise de contrôle te demande ton accord.</p></div></div>
+    <div class="actions" id="new-code-row"><button class="ghost" id="new-code">Afficher un code d'appairage</button></div>
+    <p class="hint" id="new-code-hint">Déjà appairé : cet appareil apparaît dans la liste de ton contrôleur. Un code ne sert que pour l'ajouter à un autre contrôleur.</p>
   </section>
 
   <!-- Session en cours -->
@@ -224,7 +226,10 @@ function render() {
   $('setup').hidden = !needSetup
   if (needSetup && !$('srv').dataset.touched) $('srv').value = s.server && s.link !== 'setup' ? s.server : $('srv').value
   const connected = !needSetup
-  $('pair').hidden = !(connected && (s.link === 'unpaired' || s.link === 'connecting') && s.pairing_code)
+  // Un code demandé à la main (appareil déjà en ligne) ne s'affiche que tant qu'il est valable.
+  const codeLive = !!s.pairing_code && !!s.pairing_expires_ms && s.pairing_expires_ms > Date.now()
+  $('pair').hidden = !(connected && s.pairing_code && (s.link === 'unpaired' || s.link === 'connecting' || (s.link === 'online' && codeLive)))
+  $('new-code-row').hidden = $('new-code-hint').hidden = codeLive
   $('ready').hidden = !(connected && s.link === 'online' && !s.session)
   $('session').hidden = !(connected && s.session)
   $('perms').hidden = !(connected && s.link !== 'setup')
@@ -263,6 +268,7 @@ async function poll() {
 }
 
 $('save').onclick = () => { editingSetup = false; act('/api/setup', { server: $('srv').value, api_key: $('key').value }) }
+$('new-code').onclick = () => act('/api/pairing-code')
 $('copy-code').onclick = async () => {
   const code = state?.pairing_code || ''
   if (!code) return
