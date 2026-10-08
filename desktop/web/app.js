@@ -74,8 +74,9 @@ function render() {
   const tab = activeTab(mode, wantedTab)
   const onControl = !inSettings && tab === 'control'
   const onHost = !inSettings && tab === 'host'
+  show($('settings'), inSettings)
   show($('setup'), inSettings && canControl(mode))
-  show($('mode-card'), inSettings)
+  show($('save'), canControl(mode))
   show($('home'), onControl && !live)
   show($('viewer'), onControl && !!live)
   show($('host'), onHost)
@@ -91,7 +92,7 @@ function render() {
   show($('v-caps'), inSession); show($('v-tools'), inSession); show($('disconnect'), inSession)
   if (inSession) pill(null, '')
   show($('cancel-settings'), settings.configured && canControl(mode))
-  show($('close-settings'), !(canControl(mode) && !settings.configured))
+  show($('close-settings'), !canControl(mode))
   $('key-opt').textContent = settings.configured ? '(laisse vide pour garder la clé enregistrée)' : ''
   if (!onControl) { pill(null, ''); stopPolling() } else startPolling()
   if (onControl && !live) renderDevices()
@@ -307,7 +308,8 @@ $('tab-host').addEventListener('click', () => { wantedTab = 'host'; render() })
 function renderMode() {
   const mode = settings.mode || 'control'
   $('mode-seg').replaceChildren(...MODES.map((m) => {
-    const button = el('button', '', m.label)
+    const button = el('button')
+    button.append(icon(m.icon), el('span', '', m.label))
     button.type = 'button'
     button.setAttribute('role', 'radio')
     button.setAttribute('aria-checked', String(m.id === mode))
@@ -335,6 +337,13 @@ $('autostart').addEventListener('change', async () => {
   showError($('mode-err'), '')
   try { settings = await invoke('set_autostart', { enabled: $('autostart').checked }) } catch (error) { showError($('mode-err'), message(error)); $('autostart').checked = !!settings.autostart }
 })
+$('key-toggle').addEventListener('click', () => {
+  const visible = $('key').type === 'password'
+  $('key').type = visible ? 'text' : 'password'
+  $('key-toggle').setAttribute('aria-pressed', String(visible))
+  $('key-toggle').setAttribute('aria-label', visible ? 'Masquer la clé' : 'Afficher la clé')
+  $('key-toggle').querySelector('use').setAttribute('href', visible ? '#i-eye-off' : '#i-eye')
+})
 $('close-settings').addEventListener('click', () => { editing = false; render() })
 $('open-mode').addEventListener('click', () => { editing = true; render() })
 
@@ -342,7 +351,7 @@ $('open-mode').addEventListener('click', () => { editing = true; render() })
 
 async function save() {
   showError($('setup-err'), '')
-  $('save').disabled = true; $('save').textContent = 'Connexion…'
+  $('save').disabled = true; $('save-label').textContent = 'Connexion…'
   try {
     settings = await invoke('save_settings', { server: $('srv').value, key: $('key').value })
     $('key').value = ''; editing = false
@@ -350,7 +359,7 @@ async function save() {
   } catch (error) {
     showError($('setup-err'), message(error))
   } finally {
-    $('save').disabled = false; $('save').textContent = 'Se connecter'
+    $('save').disabled = false; $('save-label').textContent = 'Se connecter'
   }
 }
 

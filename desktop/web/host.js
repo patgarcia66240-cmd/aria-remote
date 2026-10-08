@@ -2,9 +2,9 @@
 // (tests/host.test.mjs).
 
 export const MODES = [
-  { id: 'control', label: 'Contrôler', hint: 'Prendre le contrôle d\'autres PC.' },
-  { id: 'host', label: 'Être contrôlé', hint: 'Laisser quelqu\'un prendre le contrôle de ce PC. Le programme reste près de l\'horloge.' },
-  { id: 'both', label: 'Les deux', hint: 'Contrôler d\'autres PC et pouvoir être contrôlé.' },
+  { id: 'control', icon: 'i-monitor', label: 'Contrôler', hint: 'Prendre le contrôle d\'autres PC.' },
+  { id: 'host', icon: 'i-shield', label: 'Être contrôlé', hint: 'Laisser quelqu\'un prendre le contrôle de ce PC. Le programme reste près de l\'horloge.' },
+  { id: 'both', icon: 'i-swap', label: 'Les deux', hint: 'Contrôler d\'autres PC et pouvoir être contrôlé.' },
 ]
 
 export const canControl = (mode) => mode !== 'host'
