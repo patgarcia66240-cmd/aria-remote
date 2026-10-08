@@ -1,6 +1,6 @@
 # ARIA Remote Desktop
 
-L'application de bureau pour **contrôler** un PC à distance, sans passer par ARIA : on choisit un appareil, on saisit son code d'appairage, on voit son écran et on pilote souris et clavier.
+L'application de bureau pour **contrôler** un PC à distance, et pour **laisser contrôler le sien** (comme TeamViewer) : on choisit un appareil, on saisit son code d'appairage, on voit son écran et on pilote souris et clavier ; dans l'autre sens, ce PC affiche son propre code et demande l'accord de la personne devant lui.
 Elle parle au même serveur de rendez-vous (`../rendezvous/`) et aux mêmes agents (`../agent/`) que l'onglet d'ARIA.
 
 Technologie : [Tauri 2](https://tauri.app) (cœur en Rust, interface web), comme l'application de bureau de PC Assistant.
@@ -12,6 +12,21 @@ cd desktop
 npm install
 npm run dev
 ```
+
+## Contrôler ou être contrôlé : le mode de ce PC
+Le réglage **Mode** (engrenage) choisit ce que fait ce PC :
+
+| Mode | Ce que l'on voit |
+|---|---|
+| **Contrôler** (par défaut) | la liste des appareils et l'appairage, comme avant |
+| **Être contrôlé** | « Cet appareil » seulement : code d'appairage, état, autorisations, demande d'accord |
+| **Les deux** | deux onglets, **Contrôler** et **Cet appareil** |
+
+Dans les modes qui permettent d'être contrôlé, **l'agent tourne dans ce programme** (bibliothèque `remote_agent`, `../agent/src/lib.rs`) : plus de second exécutable ni de fenêtre Edge. Une seule instance d'agent par appareil : si `remote-agent.exe` tourne déjà, le desktop l'indique au lieu de démarrer un second agent.
+- **Icône près de l'horloge** : fermer la fenêtre la range là, l'appareil reste disponible. Clic gauche = ouvrir ; menu = état, couper la session, quitter. Le texte de l'icône suit l'état (« disponible », « demande de contrôle », « contrôlé à distance »).
+- **Demande de contrôle** : la fenêtre remonte au premier plan et attend l'accord (Accepter / Refuser). Rien n'est jamais accepté sans réponse de la personne devant l'appareil.
+- **Démarrer avec Windows** (option) : le programme démarre réduit près de l'horloge (`--minimized`).
+- La clé de l'agent (`RENDEZVOUS_AGENT_KEY`) est distincte de celle du contrôleur ; elle se saisit dans « Cet appareil » au premier lancement et reste dans la configuration de l'agent.
 
 ## État
 Fait : **aperçu de chaque appareil** (PC de bureau, mini PC ou portable, détecté automatiquement), **connexion au serveur** (adresse + clé du contrôleur, testées puis mémorisées), **liste des appareils**, **appairage par code** à 6 chiffres, et **prise de contrôle** : écran distant, souris, clavier, curseur distant, avec le choix des autorisations avant de se connecter.

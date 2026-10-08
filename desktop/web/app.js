@@ -1,6 +1,7 @@
 // Interface d'ARIA Remote Desktop. Tout passe par les commandes Rust (clé du contrôleur, appels réseau) : la page ne voit jamais la clé.
 import { KINDS, guessKind, loadKinds, machineSvg, saveKind } from './machines.js'
 import { createRequest, keyMessage, openSession, pointerMessage, wheelMessage } from './session.js'
+import { MODES, activeTab, canControl, canHost, clockText, formatCode, hasTabs, hostScreen, permissionText, secondsLeft } from './host.js'
 import { AutoQuality, ClipboardSync, FpsMeter, LatencyMeter, PRESETS, PRESET_ORDER, SHORTCUTS, latencyTone, screenLabel, shortcutMessages, statsTitle, streamMessage, stuckKeys } from './tools.js'
 
 const $ = (id) => document.getElementById(id)
@@ -22,7 +23,12 @@ const PERMISSIONS = [
 ]
 const MOVE_INTERVAL_MS = 30
 
-let settings = { server: '', configured: false }
+let settings = { server: '', configured: false, mode: 'control', autostart: false }
+let wantedTab = 'control'   // onglet demandé quand ce PC fait les deux
+let hostState = null        // état de l'agent intégré (null : il ne tourne pas)
+let hostError = ''
+let hostTimer = null
+let hostAsking = null       // demande de contrôle déjà signalée
 let editing = false
 let devices = []
 let timer = null
@@ -63,21 +69,34 @@ function pill(tone, text) {
 // --- Affichage général ----------------------------------------------------------------------------------------------
 
 function render() {
-  const needSetup = !settings.configured || editing
-  show($('setup'), needSetup)
-  show($('home'), !needSetup && !live)
-  show($('viewer'), !needSetup && !!live)
-  show($('open-settings'), settings.configured && !editing && !live)
+  const mode = settings.mode || 'control'
+  const inSettings = editing || (canControl(mode) && !settings.configured)
+  const tab = activeTab(mode, wantedTab)
+  const onControl = !inSettings && tab === 'control'
+  const onHost = !inSettings && tab === 'host'
+  show($('setup'), inSettings && canControl(mode))
+  show($('mode-card'), inSettings)
+  show($('home'), onControl && !live)
+  show($('viewer'), onControl && !!live)
+  show($('host'), onHost)
+  show($('tabs'), hasTabs(mode) && !inSettings)
+  $('tab-control').setAttribute('aria-selected', String(tab === 'control'))
+  $('tab-host').setAttribute('aria-selected', String(tab === 'host'))
+  show($('open-settings'), !editing && !live && (settings.configured || !canControl(mode)))
+  show($('host-tip'), mode === 'control')
   // En session, l'en-tête porte tout : appareil, état, autorisations et « Déconnecter » (pas de second bandeau).
-  const inSession = !needSetup && !!live
+  const inSession = onControl && !!live
   document.body.classList.toggle('live', inSession)
   show($('sub-idle'), !inSession); show($('sub-live'), inSession)
   show($('v-caps'), inSession); show($('v-tools'), inSession); show($('disconnect'), inSession)
   if (inSession) pill(null, '')
-  show($('cancel-settings'), settings.configured)
+  show($('cancel-settings'), settings.configured && canControl(mode))
+  show($('close-settings'), !(canControl(mode) && !settings.configured))
   $('key-opt').textContent = settings.configured ? '(laisse vide pour garder la clé enregistrée)' : ''
-  if (needSetup) { pill(null, ''); stopPolling() } else startPolling()
-  if (!needSetup && !live) renderDevices()
+  if (!onControl) { pill(null, ''); stopPolling() } else startPolling()
+  if (onControl && !live) renderDevices()
+  if (inSettings) renderMode()
+  if (onHost) renderHost()
 }
 
 // --- Appareils --------------------------------------------------------------------------------------------------------
@@ -187,6 +206,125 @@ async function refresh() {
 
 function startPolling() { if (!timer) { refresh(); timer = setInterval(() => { if (document.visibilityState === 'visible') refresh() }, 4000) } }
 function stopPolling() { clearInterval(timer); timer = null }
+
+// --- Cet appareil : l'agent intégré ---------------------------------------------------------------------------------------
+
+async function startHost() {
+  hostError = ''
+  try { await invoke('agent_start') } catch (error) { hostError = message(error) }
+  watchHost()
+}
+
+async function stopHost() {
+  await invoke('agent_stop').catch(() => {})
+  hostState = null
+  clearInterval(hostTimer); hostTimer = null
+}
+
+function watchHost() {
+  if (hostTimer || !invoke) return
+  hostTimer = setInterval(pollHost, 700)
+  pollHost()
+}
+
+async function pollHost() {
+  try { hostState = await invoke('agent_state') } catch { hostState = null }
+  announceConsent()
+  if (!$('host').hidden) renderHost()
+}
+
+/** Une demande de contrôle attend : on ramène la personne sur « Cet appareil » (sauf en pleine session de contrôle : on la prévient seulement). */
+function announceConsent() {
+  const asking = hostState?.consent?.session_id || null
+  if (asking && asking !== hostAsking && !editing) {
+    if (!live && hasTabs(settings.mode)) { wantedTab = 'host'; render() }
+    else if (live) toast('Une demande de contrôle attend ton accord sur « Cet appareil ».')
+  }
+  hostAsking = asking
+  $('tab-host').classList.toggle('badge', !!asking && activeTab(settings.mode, wantedTab) !== 'host')
+}
+
+const hostCommand = (command) => invoke('agent_command', { command }).then(() => pollHost()).catch((error) => showError($('h-err'), message(error)))
+
+function renderHost() {
+  const state = hostState
+  const screen = hostScreen(state)
+  showError($('h-err'), screen === 'error' ? (state.link_detail || 'Connexion impossible.') : hostError)
+  $('h-name').textContent = state ? `${state.device_name} · empreinte ${(state.fingerprint || '').slice(0, 8)}` : ''
+  show($('h-setup'), screen === 'setup')
+  if (screen === 'setup' && !$('h-srv').value) $('h-srv').value = settings.server || ''
+  show($('h-pair'), screen === 'pairing')
+  show($('h-ready'), screen === 'ready')
+  const wait = $('h-state')
+  wait.textContent = screen === 'off' ? (hostError ? '' : 'Démarrage de l\'agent…') : screen === 'connecting' ? 'Connexion au serveur…' : ''
+  show(wait, !!wait.textContent)
+  if (screen === 'pairing') {
+    $('h-code').textContent = formatCode(state.pairing_code)
+    const left = secondsLeft(state.pairing_expires_ms, Date.now())
+    $('h-code-left').textContent = left > 0 ? `Valable encore ${clockText(left)}.` : 'Code expiré : un nouveau va s\'afficher.'
+  }
+  show($('h-consent'), !!state?.consent)
+  if (state?.consent) $('h-consent-what').textContent = permissionText(state.consent.permissions)
+  show($('h-session-card'), !!state?.session)
+  if (state?.session) $('h-session-what').textContent = `Contrôle en cours : ${permissionText(state.session.permissions)}.`
+  show($('h-perms'), !!state && screen !== 'setup')
+  if (state) {
+    if (document.activeElement !== $('h-mouse')) $('h-mouse').checked = !!state.allow_mouse
+    if (document.activeElement !== $('h-keyboard')) $('h-keyboard').checked = !!state.allow_keyboard
+  }
+}
+
+$('h-save').addEventListener('click', () => {
+  if (!$('h-srv').value.trim()) return showError($('h-err'), 'Saisis l\'adresse du serveur.')
+  showError($('h-err'), '')
+  hostCommand({ type: 'configure', server: $('h-srv').value, api_key: $('h-key').value }).then(() => { $('h-key').value = '' })
+})
+$('h-newcode').addEventListener('click', () => hostCommand({ type: 'new_pairing_code' }))
+$('h-accept').addEventListener('click', () => hostState?.consent && hostCommand({ type: 'consent', session_id: hostState.consent.session_id, accept: true }))
+$('h-refuse').addEventListener('click', () => hostState?.consent && hostCommand({ type: 'consent', session_id: hostState.consent.session_id, accept: false }))
+$('h-stop').addEventListener('click', () => hostCommand({ type: 'stop_session' }))
+const sendAllow = () => hostCommand({ type: 'set_allow', mouse: $('h-mouse').checked, keyboard: $('h-keyboard').checked })
+$('h-mouse').addEventListener('change', sendAllow)
+$('h-keyboard').addEventListener('change', sendAllow)
+
+$('tab-control').addEventListener('click', () => { wantedTab = 'control'; render() })
+$('tab-host').addEventListener('click', () => { wantedTab = 'host'; render() })
+
+// --- Mode de ce PC ----------------------------------------------------------------------------------------------------------
+
+function renderMode() {
+  const mode = settings.mode || 'control'
+  $('mode-seg').replaceChildren(...MODES.map((m) => {
+    const button = el('button', '', m.label)
+    button.type = 'button'
+    button.setAttribute('role', 'radio')
+    button.setAttribute('aria-checked', String(m.id === mode))
+    button.onclick = () => changeMode(m.id)
+    return button
+  }))
+  $('mode-hint').textContent = MODES.find((m) => m.id === mode)?.hint || ''
+  $('autostart').checked = !!settings.autostart
+}
+
+async function changeMode(mode) {
+  showError($('mode-err'), '')
+  try {
+    settings = await invoke('set_mode', { mode })
+    if (canHost(mode)) watchHost(); else { clearInterval(hostTimer); hostTimer = null; hostState = null }
+    if (!hasTabs(mode)) wantedTab = canHost(mode) ? 'host' : 'control'
+    hostError = ''
+  } catch (error) {
+    showError($('mode-err'), message(error))
+  }
+  render()
+}
+
+$('autostart').addEventListener('change', async () => {
+  showError($('mode-err'), '')
+  try { settings = await invoke('set_autostart', { enabled: $('autostart').checked }) } catch (error) { showError($('mode-err'), message(error)); $('autostart').checked = !!settings.autostart }
+})
+$('close-settings').addEventListener('click', () => { editing = false; render() })
+$('open-mode').addEventListener('click', () => { editing = true; render() })
 
 // --- Réglages ---------------------------------------------------------------------------------------------------------
 
@@ -659,6 +797,8 @@ async function start() {
   invoke('app_version').then((v) => { $('ver').textContent = 'v' + v; show($('ver'), true) }).catch(() => {})
   settings = await invoke('load_settings')
   $('srv').value = settings.server
+  wantedTab = canHost(settings.mode) && !canControl(settings.mode) ? 'host' : 'control'
   render()
+  if (canHost(settings.mode)) { await startHost(); render() }
 }
 start()

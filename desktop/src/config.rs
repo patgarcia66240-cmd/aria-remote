@@ -3,17 +3,40 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Config {
     #[serde(default)]
     pub server: String,
     #[serde(default)]
     pub key: String,
+    /// Ce que fait ce PC : « control » (prendre le contrôle, par défaut), « host » (être contrôlé) ou « both ».
+    #[serde(default = "default_mode")]
+    pub mode: String,
+    /// Démarrer avec Windows (réduit près de l'horloge quand ce PC peut être contrôlé).
+    #[serde(default)]
+    pub autostart: bool,
+}
+
+pub const MODES: [&str; 3] = ["control", "host", "both"];
+
+fn default_mode() -> String {
+    "control".into()
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self { server: String::new(), key: String::new(), mode: default_mode(), autostart: false }
+    }
 }
 
 impl Config {
     pub fn configured(&self) -> bool {
         !self.server.is_empty() && !self.key.is_empty()
+    }
+
+    /// Ce PC peut-il être contrôlé (l'agent tourne dans ce programme) ?
+    pub fn hosts(&self) -> bool {
+        self.mode == "host" || self.mode == "both"
     }
 }
 
@@ -57,10 +80,12 @@ mod tests {
         let file = dir.join("config.json");
         assert_eq!(load_from(&file), Config::default());
         assert!(!Config::default().configured());
-        let config = Config { server: "https://rv.exemple.fr".into(), key: "k".into() };
+        let config = Config { server: "https://rv.exemple.fr".into(), key: "k".into(), mode: "both".into(), autostart: true };
         save_to(&file, &config).unwrap();
         assert_eq!(load_from(&file), config);
-        assert!(config.configured());
+        assert!(config.configured() && config.hosts());
+        assert!(!Config::default().hosts(), "par défaut : contrôler seulement (comme avant)");
+        assert_eq!(serde_json::from_str::<Config>(r#"{"server":"s","key":"k"}"#).unwrap().mode, "control", "une ancienne configuration reste en mode contrôle");
         std::fs::remove_dir_all(dir).ok();
     }
 }

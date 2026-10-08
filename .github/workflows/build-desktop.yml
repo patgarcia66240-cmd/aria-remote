@@ -1,5 +1,5 @@
 # Compile l'application de bureau (desktop/) pour Windows et publie aria-remote-desktop.exe.
-#   - À chaque changement de desktop/ : compilation sous Windows (l'exe est gardé 30 jours comme « artefact » de l'exécution).
+#   - À chaque changement de desktop/ ou de agent/ (le desktop embarque l'agent) : compilation sous Windows (l'exe est gardé 30 jours comme « artefact » de l'exécution).
 #   - Avec une étiquette « desktop-vX.Y.Z » (git tag desktop-v0.1.0 && git push origin desktop-v0.1.0) : l'exe et son empreinte SHA-256
 #     sont joints à une version (Release), d'où la page de téléchargement les récupère.
 #   - L'étiquette doit égaler la version de desktop/Cargo.toml ET de desktop/tauri.conf.json, sinon la compilation s'arrête.
@@ -8,7 +8,7 @@ name: Desktop Windows
 on:
   push:
     branches: [main]
-    paths: ['desktop/**', '.github/workflows/build-desktop.yml']
+    paths: ['desktop/**', 'agent/**', '.github/workflows/build-desktop.yml']
     tags: ['desktop-v*']
   workflow_dispatch:
 

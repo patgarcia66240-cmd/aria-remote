@@ -14,7 +14,7 @@ Contrôle d'un PC à distance, sécurisé : un **agent Windows** (fenêtre local
 | `agent/` | l'agent Rust (`remote-agent.exe`) : capture, souris, clavier, fenêtre locale |
 | `rendezvous/` | le serveur public (FastAPI + coturn), déploiement VPS/Docker |
 | `download/` | la page de téléchargement (nginx), construite depuis les releases de ce dépôt |
-| `desktop/` | l'application de bureau pour contrôler un PC (Tauri 2, Rust), en cours de démarrage |
+| `desktop/` | l'application de bureau (Tauri 2, Rust) : contrôler un PC **et** laisser contrôler le sien (l'agent y est intégré, icône près de l'horloge) |
 | `plugin/` | le plugin Remote d'ARIA (appairage, sessions, signaling) |
 | `ui/` | l'onglet « Maintenance à distance » d'ARIA (React) |
 | `docs/` | architecture et sécurité (`REMOTE_ARCHITECTURE.md`) |
