@@ -21,6 +21,11 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::UnboundedSender;
 
 const PAGE: &str = include_str!("../ui/index.html");
+
+/// Page servie à la fenêtre : nom et version viennent du code (WINDOW_TITLE, Cargo.toml), jamais écrits à la main dans la page.
+fn render_page() -> String {
+    PAGE.replace("{{APP_NAME}}", WINDOW_TITLE).replace("{{VERSION}}", env!("CARGO_PKG_VERSION"))
+}
 const MAX_EVENTS: usize = 12;
 /// La fenêtre est « vue » si elle a interrogé l'agent il y a moins de 3 s en se disant visible (les onglets cachés ralentissent leurs minuteries).
 /// Titre de la page ui/index.html, donc de la fenêtre d'application.
@@ -166,8 +171,8 @@ struct StateQuery {
     v: u8,
 }
 
-async fn page() -> Html<&'static str> {
-    Html(PAGE)
+async fn page() -> Html<String> {
+    Html(render_page())
 }
 
 async fn state(State(ui): State<Ui>, axum::extract::Query(query): axum::extract::Query<StateQuery>) -> Json<UiState> {
@@ -275,12 +280,37 @@ pub fn minimize_window(minimize: bool) {
     let _ = minimize;
 }
 
+/// Ferme la fenêtre de l'agent (fin de session) : l'agent reste en ligne, la fenêtre se rouvre avec l'application. Sans effet hors Windows.
+pub fn close_window() {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Foundation::{BOOL, HWND, LPARAM};
+        use windows_sys::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowTextW, IsWindowVisible, PostMessageW, WM_CLOSE};
+
+        unsafe extern "system" fn visit(hwnd: HWND, _: LPARAM) -> BOOL {
+            let mut title = [0u16; 64];
+            let len = GetWindowTextW(hwnd, title.as_mut_ptr(), title.len() as i32).max(0) as usize;
+            if String::from_utf16_lossy(&title[..len]) == WINDOW_TITLE && IsWindowVisible(hwnd) != 0 {
+                PostMessageW(hwnd, WM_CLOSE, 0, 0);
+            }
+            1
+        }
+        unsafe { EnumWindows(Some(visit), 0); }
+    }
+}
+
 /// Ouvre la fenêtre : Edge ou Chrome en mode application (fenêtre sans barre d'adresse, comme un vrai logiciel) ; sinon le navigateur par défaut.
 pub fn open_window(url: &str) {
     use std::process::{Command, Stdio};
     let app_arg = format!("--app={url}");
-    let size = "--window-size=480,800";
+    let size = "--window-size=400,540";
     let quiet = |mut command: Command| command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().is_ok();
+    // Profil dédié à la fenêtre : sans lui, Edge/Chrome restaure la taille mémorisée et ignore --window-size.
+    let profile = std::env::var("LocalAppData").ok().map(|local| {
+        let dir = std::path::Path::new(&local).join("ARIA Remote").join("window-profile");
+        let _ = std::fs::create_dir_all(&dir);
+        format!("--user-data-dir={}", dir.display())
+    });
 
     #[cfg(windows)]
     {
@@ -292,6 +322,9 @@ pub fn open_window(url: &str) {
                 if path.exists() {
                     let mut command = Command::new(path);
                     command.args([app_arg.as_str(), size]);
+                    if let Some(profile) = &profile {
+                        command.arg(profile);
+                    }
                     if quiet(command) {
                         return;
                     }

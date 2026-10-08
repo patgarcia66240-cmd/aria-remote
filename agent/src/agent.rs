@@ -373,7 +373,7 @@ impl Agent {
                     peer.close().await;
                 }
                 self.ui(|s| s.session = None);
-                ui::minimize_window(false);
+                ui::close_window();
             }
             None => self.log("aucune session en cours"),
         }
@@ -590,7 +590,7 @@ impl Agent {
                 }
             }
             self.ui(|s| s.session = None);
-            ui::minimize_window(false);
+            ui::close_window();
             self.log("session terminée");
         }
     }
