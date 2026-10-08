@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Logo ARIA">
+  <defs>
+    <linearGradient id="aria-a" x1="30" y1="5" x2="14" y2="71" gradientUnits="userSpaceOnUse"><stop stop-color="#8A8EE6"/><stop offset="1" stop-color="#6469C8"/></linearGradient>
+    <linearGradient id="aria-b" x1="48" y1="31" x2="62" y2="71" gradientUnits="userSpaceOnUse"><stop stop-color="#5CB3D6"/><stop offset="1" stop-color="#86A0E6"/></linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#0C131C"/>
+  <g transform="translate(32 32) scale(.74) translate(-38 -38.5)">
+    <path d="M34.5 8Q38 4 42 8Q48 14 48.5 24L23.5 71H6.5Z" fill="url(#aria-a)"/>
+    <path d="M52 31.5Q54 31 55 33.5L69.5 69Q69.8 71 67.5 71H57Q55 71 54 70L37 58.5Q36 57.5 36.8 56.5L50 33Q50.8 31.7 52 31.5Z" fill="url(#aria-b)"/>
+  </g>
+</svg>

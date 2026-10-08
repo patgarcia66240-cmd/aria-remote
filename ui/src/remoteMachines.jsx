@@ -19,13 +19,16 @@ export function guessKind(device) {
 }
 
 function Screen({ x, y, w, h, on }) {
-  const cx = x + w / 2
-  const cy = y + h / 2
+  const scale = (Math.min(w, h) * 0.5) / 65
   return (
     <>
       <rect x={x} y={y} width={w} height={h} rx="5" fill={on ? 'url(#rm-on)' : 'url(#rm-off)'} />
-      {on && <circle cx={cx} cy={cy} r={Math.min(w, h) * 0.16} fill="none" stroke="#e0f2fe" strokeWidth="2.2" />}
-      {on && <circle cx={cx} cy={cy} r={Math.min(w, h) * 0.06} fill="#e0f2fe" />}
+      {on && (
+        <g transform={`translate(${x + w / 2} ${y + h / 2}) scale(${scale.toFixed(4)}) translate(-38 -38.5)`}>
+          <path d="M34.5 8Q38 4 42 8Q48 14 48.5 24L23.5 71H6.5Z" fill="#fff" fillOpacity=".92" />
+          <path d="M52 31.5Q54 31 55 33.5L69.5 69Q69.8 71 67.5 71H57Q55 71 54 70L37 58.5Q36 57.5 36.8 56.5L50 33Q50.8 31.7 52 31.5Z" fill="#e0f2fe" fillOpacity=".92" />
+        </g>
+      )}
     </>
   )
 }

@@ -11,7 +11,8 @@ const LINE = '#3b4a66'
 const BEZEL = '#1b2130'
 
 const screen = (x, y, w, h, on) => {
-  const logo = on ? `<g fill="none" stroke="#e0f2fe" stroke-width="2.2"><circle cx="${x + w / 2}" cy="${y + h / 2}" r="${Math.min(w, h) * 0.16}"/></g><circle cx="${x + w / 2}" cy="${y + h / 2}" r="${Math.min(w, h) * 0.06}" fill="#e0f2fe"/>` : ''
+  const scale = (Math.min(w, h) * 0.5) / 65
+  const logo = on ? `<g transform="translate(${x + w / 2} ${y + h / 2}) scale(${scale.toFixed(4)}) translate(-38 -38.5)"><path d="M34.5 8Q38 4 42 8Q48 14 48.5 24L23.5 71H6.5Z" fill="#fff" fill-opacity=".92"/><path d="M52 31.5Q54 31 55 33.5L69.5 69Q69.8 71 67.5 71H57Q55 71 54 70L37 58.5Q36 57.5 36.8 56.5L50 33Q50.8 31.7 52 31.5Z" fill="#e0f2fe" fill-opacity=".92"/></g>` : ''
   return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="5" fill="url(#${on ? 'scr-on' : 'scr-off'})"/>${logo}`
 }
 const led = (cx, cy, on, r = 2.4) => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${on ? '#34d399' : '#5b6578'}"/>`
