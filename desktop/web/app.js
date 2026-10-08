@@ -1,7 +1,7 @@
 // Interface d'ARIA Remote Desktop. Tout passe par les commandes Rust (clé du contrôleur, appels réseau) : la page ne voit jamais la clé.
 import { KINDS, guessKind, loadKinds, machineSvg, saveKind } from './machines.js'
 import { createRequest, keyMessage, openSession, pointerMessage, wheelMessage } from './session.js'
-import { MODES, activeTab, canControl, canHost, clockText, formatCode, hasTabs, hostScreen, permissionText, secondsLeft } from './host.js'
+import { MODES, activeTab, canControl, canHost, clockText, consentSecondsLeft, hostBadge, formatCode, hasTabs, hostScreen, permissionText, secondsLeft } from './host.js'
 import { AutoQuality, ClipboardSync, FpsMeter, LatencyMeter, PRESETS, PRESET_ORDER, SHORTCUTS, latencyTone, screenLabel, shortcutMessages, statsTitle, streamMessage, stuckKeys } from './tools.js'
 
 const $ = (id) => document.getElementById(id)
@@ -230,7 +230,16 @@ function watchHost() {
 async function pollHost() {
   try { hostState = await invoke('agent_state') } catch { hostState = null }
   announceConsent()
+  renderHostPill()
   if (!$('host').hidden) renderHost()
+}
+
+/** Pastille de l'en-tête : pendant un contrôle sortant l'en-tête est occupé, elle n'y reste que si quelqu'un nous contrôle. */
+function renderHostPill() {
+  const badge = hostBadge(hostState)
+  const visible = !!badge && (!live || !!hostState?.session)
+  show($('host-pill'), visible)
+  if (visible) { $('host-pill').className = `pill ${badge[0]}`; $('host-pill-text').textContent = badge[1] }
 }
 
 /** Une demande de contrôle attend : on ramène la personne sur « Cet appareil » (sauf en pleine session de contrôle : on la prévient seulement). */
@@ -264,7 +273,10 @@ function renderHost() {
     $('h-code-left').textContent = left > 0 ? `Valable encore ${clockText(left)}.` : 'Code expiré : un nouveau va s\'afficher.'
   }
   show($('h-consent'), !!state?.consent)
-  if (state?.consent) $('h-consent-what').textContent = permissionText(state.consent.permissions)
+  if (state?.consent) {
+    $('h-consent-what').textContent = permissionText(state.consent.permissions)
+    $('h-consent-left').textContent = `Sans réponse dans ${consentSecondsLeft(state.consent.since_ms, Date.now())} s, la demande est refusée.`
+  }
   show($('h-session-card'), !!state?.session)
   if (state?.session) $('h-session-what').textContent = `Contrôle en cours : ${permissionText(state.session.permissions)}.`
   show($('h-perms'), !!state && screen !== 'setup')

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { activeTab, canControl, canHost, clockText, formatCode, hasTabs, hostScreen, permissionText, secondsLeft } from '../web/host.js'
+import { CONSENT_SECONDS, activeTab, consentSecondsLeft, hostBadge, canControl, canHost, clockText, formatCode, hasTabs, hostScreen, permissionText, secondsLeft } from '../web/host.js'
 
 describe('modes', () => {
   it('contrôler seulement, être contrôlé seulement, ou les deux', () => {
@@ -47,5 +47,21 @@ describe('écran de « Cet appareil »', () => {
   it('décrit en clair ce que le contrôleur demande', () => {
     assert.equal(permissionText(['view_screen', 'control_mouse']), 'voir l\'écran, utiliser la souris')
     assert.equal(permissionText(undefined), '')
+  })
+})
+
+describe('pastille de l\'en-tête', () => {
+  it('résume l\'état de l\'agent sur tous les onglets', () => {
+    assert.equal(hostBadge(null), null)
+    assert.deepEqual(hostBadge({ link: 'online' }), ['ok', 'Disponible'])
+    assert.deepEqual(hostBadge({ link: 'error' }), ['bad', 'Hors ligne'])
+    assert.deepEqual(hostBadge({ link: 'unpaired', pairing_code: '483921' }), ['warn', 'Code 483 921'])
+    assert.deepEqual(hostBadge({ link: 'online', session: { session_id: 's' } }), ['bad', 'Contrôlé'])
+  })
+
+  it('le compte à rebours de la demande va de 60 s à 0 sans devenir négatif', () => {
+    assert.equal(consentSecondsLeft(0, 0), CONSENT_SECONDS)
+    assert.equal(consentSecondsLeft(0, 45_000), 15)
+    assert.equal(consentSecondsLeft(0, 90_000), 0)
   })
 })

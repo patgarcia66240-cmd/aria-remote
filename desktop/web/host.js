@@ -48,3 +48,16 @@ const PERMISSION_TEXT = { view_screen: 'voir l\'écran', control_mouse: 'utilise
 
 /** « voir l'écran, utiliser la souris » : ce que la personne qui demande veut faire, en clair. */
 export const permissionText = (permissions) => (permissions || []).map((p) => PERMISSION_TEXT[p] || p).join(', ')
+
+const LINK = { connecting: ['warn', 'Connexion…'], unpaired: ['warn', 'À appairer'], online: ['ok', 'Disponible'], error: ['bad', 'Hors ligne'], setup: ['warn', 'À configurer'] }
+
+/** Pastille de l'en-tête, visible sur tous les onglets : [ton, texte] ; null si l'agent ne tourne pas. */
+export function hostBadge(state) {
+  if (!state) return null
+  if (state.session) return ['bad', 'Contrôlé']
+  const [tone, text] = LINK[state.link] || ['warn', '…']
+  return [tone, state.link === 'unpaired' && state.pairing_code ? `Code ${formatCode(state.pairing_code)}` : text]
+}
+
+export const CONSENT_SECONDS = 60      // sans réponse, l'agent refuse (agent.rs : CONSENT_TIMEOUT)
+export const consentSecondsLeft = (sinceMs, nowMs) => Math.max(0, CONSENT_SECONDS - Math.round((nowMs - sinceMs) / 1000))

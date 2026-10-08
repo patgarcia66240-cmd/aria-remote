@@ -55,6 +55,7 @@
     <button class="tool" id="t-full" type="button" aria-label="Plein écran (F11)" title="Plein écran (F11)"><svg class="i"><use href="#i-expand"/></svg></button>
   </div>
   <button class="ghost danger-text compact" id="disconnect" hidden><svg class="i"><use href="#i-power"/></svg>Déconnecter</button>
+  <span class="pill" id="host-pill" hidden title="État de cet appareil (peut être contrôlé)"><span class="dot"></span><span id="host-pill-text"></span></span>
   <span class="pill" id="pill" hidden><span class="dot"></span><span id="pill-text"></span></span>
   <button class="icon" id="open-settings" title="Réglages" aria-label="Réglages" hidden><svg class="i"><use href="#i-gear"/></svg></button>
 </header>
@@ -127,6 +128,7 @@
     <section class="card consent" id="h-consent" role="alertdialog" aria-labelledby="h-consent-title" hidden>
       <h2 id="h-consent-title">Demande de contrôle</h2>
       <p>Quelqu'un demande à <b id="h-consent-what"></b> sur ce PC.</p>
+      <p class="hint" id="h-consent-left"></p>
       <div class="actions"><button class="ghost" id="h-refuse">Refuser</button><button id="h-accept" class="grow">Accepter</button></div>
     </section>
 
