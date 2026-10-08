@@ -2,24 +2,13 @@
 //!
 //! Il ne fonctionne jamais caché : une fenêtre montre son état et le code d'appairage, demande l'accord de la personne devant l'appareil pour
 //! CHAQUE session et permet de la couper. Souris et clavier ne sont possibles que si l'utilisateur de l'appareil les autorise (dans la fenêtre).
-
-mod agent;
-mod capture;
-mod clipboard;
-mod config;
-mod identity;
-mod input;
-mod network;
-mod pipeline;
-mod platform;
-mod session;
-mod ui;
+//! Le moteur est dans la bibliothèque (lib.rs) ; ce programme n'ajoute que la ligne de commande et l'ouverture de la fenêtre.
 
 use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
-use tokio::sync::mpsc;
+use remote_agent::{launch, ui, Interface, Settings};
 
 #[derive(Parser)]
 #[command(version, about = "Agent Remote de PC Assistant")]
@@ -55,68 +44,19 @@ struct Cli {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    let path = cli.config.unwrap_or_else(config::default_path);
-    let (mut config, identity) = config::load_or_create(&path, cli.name.as_deref())?;
-    println!("Agent Remote — appareil « {} » ({})", config.name, config.device_id);
-
-    // Adresse et clé : ligne de commande > valeurs retenues > fenêtre (ou console avec --no-gui) > défaut local.
-    let gui = !cli.no_gui;
-    let unknown_server = cli.server.as_deref().and_then(config::normalize_server).is_none() && config.server.is_none();
-    let (server, api_key, mut changed) = if gui && unknown_server {
-        (String::new(), cli.api_key.clone().unwrap_or_default(), false) // la fenêtre la demandera
-    } else {
-        config::resolve_connection(cli.server, cli.api_key, &mut config, &mut ask_connection)
-    };
-    if let Some(allow) = cli.allow {
-        if config.allow.as_ref() != Some(&allow) {
-            config.allow = Some(allow);
-            changed = true;
-        }
+    let mut settings = Settings::new(if cli.no_gui { Interface::Console } else { Interface::Web });
+    settings.config_path = cli.config;
+    settings.name = cli.name;
+    settings.server = cli.server;
+    settings.api_key = cli.api_key;
+    settings.allow = cli.allow;
+    settings.auto_accept = cli.auto_accept;
+    settings.ask_connection = Some(ask_connection);
+    let agent = launch(settings).await?;
+    if let (false, Some(url)) = (cli.no_window, agent.url()) {
+        ui::open_window(url);
     }
-    if changed {
-        config::save(&path, &config)?;
-        println!("Réglages retenus dans {} : la prochaine fois, plus rien à saisir.", path.display());
-    }
-    let allow = input::parse_allow(config.allow.as_deref().unwrap_or(""));
-    let fingerprint = identity::sha256_hex(&identity.public_key())[..16].to_string();
-    println!("Empreinte de la clé : {fingerprint}");
-
-    let (commands_tx, commands_rx) = mpsc::unbounded_channel();
-    let ui = if gui {
-        let initial = ui::UiState {
-            device_name: config.name.clone(),
-            device_id: config.device_id.clone(),
-            fingerprint: fingerprint.clone(),
-            server: server.clone(),
-            link: if server.is_empty() { "setup".into() } else { "connecting".into() },
-            ..Default::default()
-        };
-        let ui = ui::start(commands_tx.clone(), initial).await?;
-        println!("Fenêtre de l'agent : {}", ui.url());
-        if !cli.no_window {
-            ui::open_window(&ui.url());
-        }
-        Some(ui)
-    } else {
-        if !server.is_empty() {
-            println!("Serveur : {server}");
-        }
-        None
-    };
-
-    let options = agent::Options {
-        server,
-        api_key,
-        allow,
-        auto_accept: cli.auto_accept,
-        screens: capture::screen::default_screens(),
-        input: Box::new(default_input),
-        ui,
-        config_path: path,
-    };
-    let result = agent::Agent::new(options, config, identity, commands_rx).run().await;
-    drop(commands_tx);
-    result
+    agent.wait().await
 }
 
 /// Mode console (--no-gui), premier lancement : demande où se trouve le serveur. None hors terminal (service, tâche planifiée).
@@ -137,15 +77,4 @@ fn ask_connection() -> Option<(String, String)> {
     let server = ask("Adresse du serveur : ");
     let key = ask("Clé d'accès (vide s'il n'y en a pas) : ");
     Some((server, key))
-}
-
-#[cfg(windows)]
-fn default_input() -> Result<Box<dyn input::InputSink>> {
-    Ok(Box::new(input::native::NativeInput::new()?))
-}
-
-#[cfg(not(windows))]
-fn default_input() -> Result<Box<dyn input::InputSink>> {
-    eprintln!("[agent] hors Windows : la saisie est seulement journalisée (aucune action réelle).");
-    Ok(Box::new(input::LogInput::echoing()))
 }

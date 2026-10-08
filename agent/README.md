@@ -70,6 +70,11 @@ cargo run --release -- --server http://IP_DU_PC_ASSISTANT:8000 --api-key <API_AU
 
 Le code d'appairage vaut 30 minutes par défaut ; réglable côté backend par `REMOTE_PAIRING_CODE_TTL` (secondes, entre 60 et 86400) dans `backend/.env`.
 
+## Moteur réutilisable et instance unique
+Depuis la 1.10.0, le moteur est une **bibliothèque** (`src/lib.rs`) ; `remote-agent.exe` n'en est que la ligne de commande et l'ouverture de la fenêtre. `remote_agent::launch(Settings)` démarre l'agent dans son propre fil et renvoie un `Launched` : `state()` (lien, code d'appairage, demande d'accord, session), `send(UiCommand)` (accepter, refuser, couper, autorisations, nouveau code, quitter) et `wait()`.
+Trois interfaces : `Console`, `Web` (la page locale actuelle) et `Embedded` (aucun serveur : le programme qui héberge l'agent affiche l'état lui-même, c'est ce que fera ARIA Remote Desktop).
+**Une seule instance par appareil** : un verrou de fichier (`config.lock`, à côté de `config.json`) empêche de lancer deux agents avec la même identité ; le système le libère même si le processus plante.
+
 ## Compiler
 
 - **Windows** (capture écran `xcap`, saisie `enigo`, fenêtre de consentement `rfd`) : `cargo build --release`.
