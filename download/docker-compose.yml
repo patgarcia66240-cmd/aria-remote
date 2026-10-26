@@ -1,4 +1,4 @@
-# Page de téléchargement de l'agent sur un serveur qui a DÉJÀ un Traefik (modèle « Ubuntu avec n8n » de Hostinger).
+# Page de téléchargement de l'agent (proposition : servie sous /remote) sur un serveur qui a DÉJÀ un Traefik (modèle « Ubuntu avec n8n » de Hostinger).
 # La page se met à jour toute seule (toutes les REFRESH_SECONDS) : il suffit de publier une version sur GitHub. Dépôt public : aucun jeton.
 # Variables facultatives (fichier .env ou « Environment » du projet) : SITE_HOST (par défaut processxen.com), REFRESH_SECONDS (par défaut 600).
 services:
@@ -16,7 +16,9 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-n8n_default}
-      - traefik.http.routers.pc-download.rule=Host(`${SITE_HOST:-processxen.com}`) || Host(`www.${SITE_HOST:-processxen.com}`)
+      - traefik.http.routers.pc-download.rule=(Host(`${SITE_HOST:-processxen.com}`) || Host(`www.${SITE_HOST:-processxen.com}`)) && PathPrefix(`/remote`)
+      - traefik.http.middlewares.pc-download-strip.stripprefix.prefixes=/remote
+      - traefik.http.routers.pc-download.middlewares=pc-download-strip
       - traefik.http.routers.pc-download.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
       - traefik.http.routers.pc-download.tls=true
       - traefik.http.routers.pc-download.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-mytlschallenge}
