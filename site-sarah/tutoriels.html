@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tutoriels · Sarah</title>
+<style>
+  :root {
+    --bg: #fbf8f3;
+    --surface: #ffffff;
+    --ink: #1f1d24;
+    --ink-soft: #4a4754;
+    --muted: #6b6775;
+    --accent: #b8553a;
+    --accent-ink: #ffffff;
+    --sage: #56775a;
+    --line: #e7e0d3;
+    --radius: 14px;
+    --max: 1040px;
+    --space: clamp(56px, 8vw, 104px);
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  * { margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 1.0625rem;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  img { display: block; max-width: 100%; height: auto; }
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:focus-visible, .btn:focus-visible { outline: 3px solid var(--sage); outline-offset: 3px; border-radius: 6px; }
+
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+  .sans { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+  /* En-tête */
+  .top { display: flex; align-items: center; justify-content: space-between; padding: 22px 0; }
+  .brand { font-family: system-ui, sans-serif; font-weight: 700; font-size: 1rem; text-decoration: none; color: var(--ink); }
+  .nav { display: flex; gap: 22px; font-family: system-ui, sans-serif; font-size: .92rem; }
+  .nav a { color: var(--ink-soft); text-decoration: none; }
+  .nav a:hover { color: var(--accent); }
+  @media (max-width: 620px) { .nav { display: none; } }
+
+  /* Accueil */
+  .hero { padding: clamp(48px, 9vw, 96px) 0 var(--space); display: grid; gap: 28px; }
+  .eyebrow { font-family: system-ui, sans-serif; font-size: .82rem; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--accent); }
+  h1 { font-size: clamp(2.25rem, 5.2vw, 3.4rem); line-height: 1.12; font-weight: 700; letter-spacing: -0.01em; max-width: 18ch; }
+  .lead { font-size: 1.2rem; color: var(--ink-soft); max-width: 58ch; }
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+  .btn {
+    display: inline-flex; align-items: center; min-height: 46px; padding: 0 22px; border-radius: 999px;
+    font-family: system-ui, sans-serif; font-weight: 600; font-size: .95rem; text-decoration: none;
+    border: 1.5px solid var(--ink); color: var(--ink); transition: background .2s, color .2s;
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .btn.primary:hover { background: #9f452d; border-color: #9f452d; }
+  .btn:not(.primary):hover { background: var(--ink); color: var(--bg); }
+
+  /* Sections */
+  section { padding: var(--space) 0; border-top: 1px solid var(--line); }
+  .head { display: grid; gap: 10px; margin-bottom: 36px; max-width: 60ch; }
+  h2 { font-size: clamp(1.6rem, 3vw, 2.1rem); line-height: 1.2; font-weight: 700; letter-spacing: -0.005em; }
+  .kicker { font-family: system-ui, sans-serif; font-size: .8rem; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--sage); }
+  .sub { color: var(--muted); }
+
+  .feature { display: grid; gap: 36px; align-items: center; }
+  @media (min-width: 800px) { .feature { grid-template-columns: 1.1fr 1fr; } .feature.flip { grid-template-columns: 1fr 1.1fr; } .feature.flip > :first-child { order: 2; } }
+  .frame { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); background: var(--surface); }
+  .frame img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+
+  .cards { display: grid; gap: 16px; grid-template-columns: 1fr; }
+  @media (min-width: 640px) { .cards { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 960px) { .cards.three { grid-template-columns: repeat(3, 1fr); } }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; display: grid; gap: 8px; align-content: start; }
+  .card h3 { font-size: 1.1rem; line-height: 1.3; font-weight: 700; }
+  .card p { color: var(--muted); font-size: .98rem; }
+  .num { font-family: system-ui, sans-serif; font-size: .8rem; font-weight: 700; color: var(--accent); }
+  .pill { justify-self: start; font-family: system-ui, sans-serif; font-size: .75rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: #efe9dc; color: var(--ink-soft); }
+
+  .quote { border-left: 3px solid var(--accent); padding: 4px 0 4px 22px; font-size: 1.2rem; color: var(--ink-soft); max-width: 60ch; }
+
+  .contact { background: var(--ink); color: var(--bg); border-radius: 20px; padding: clamp(32px, 6vw, 56px); display: grid; gap: 14px; }
+  .contact h2 { color: var(--bg); }
+  .contact p { color: #d8d3c9; max-width: 56ch; }
+  .contact .btn { border-color: var(--bg); color: var(--bg); }
+  .contact .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .contact .btn:not(.primary):hover { background: var(--bg); color: var(--ink); }
+
+  footer { padding: 40px 0 56px; font-family: system-ui, sans-serif; font-size: .88rem; color: var(--muted); border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .btn { transition: none; } }
+
+a.card { color: inherit; text-decoration: none; transition: border-color .2s, transform .2s; }
+a.card:hover { border-color: var(--accent); transform: translateY(-2px); }
+a.card:focus-visible { outline: 3px solid var(--sage); outline-offset: 3px; }
+.back { font-family: system-ui, sans-serif; font-size: .92rem; }
+.article { max-width: 680px; margin: 0 auto; padding: 48px 0 72px; }
+.article h1 { font-size: clamp(2rem, 4.5vw, 2.6rem); line-height: 1.2; font-weight: 700; margin: 14px 0 26px; }
+.article h2 { font-size: 1.3rem; margin: 28px 0 10px; }
+.article p, .article li { margin-bottom: 12px; }
+.article ul, .article ol { padding-left: 22px; margin-bottom: 14px; }
+.article .box { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 22px; margin: 24px 0; }
+.stack { display: grid; gap: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top"><a class="brand" href="index.html">Sarah</a><nav class="nav" aria-label="Navigation principale"><a href="bd.html">Bandes dessinées</a><a href="apps.html">Applications</a><a href="tutoriels.html">Tutoriels</a><a href="index.html#contact">Contact</a></nav></header>
+<main><section style="border-top:0;padding-top:48px"><div class="head"><p class="kicker">Tutoriels</p><h2>L'IA au quotidien, en une page</h2><p class="sub">Chaque méthode se lit en moins de cinq minutes.</p></div><div class="cards"><a class="card" href="tutoriels/01-comprendre-ia.html"><span class="num">1</span><h3>Comprendre l'IA en deux minutes</h3><p></p></a><a class="card" href="tutoriels/02-formuler.html"><span class="num">2</span><h3>Bien formuler une demande</h3><p>Une bonne demande contient quatre éléments :</p></a><a class="card" href="tutoriels/03-devis.html"><span class="num">3</span><h3>Rédiger un devis ou une facture plus vite</h3><p>3. Vérifie les montants et les mentions légales avant envoi. Les obligations varient selon le statut : confirme-les auprès de ta chambre de </p></a><a class="card" href="tutoriels/04-repondre.html"><span class="num">4</span><h3>Répondre aux e-mails et aux messages clients</h3><p></p></a><a class="card" href="tutoriels/05-semaine.html"><span class="num">5</span><h3>Préparer un planning de la semaine</h3><p>3. Recopie le résultat dans ton agenda. L'IA ne remplace pas ton agenda, elle prépare le brouillon.</p></a><a class="card" href="tutoriels/06-courrier.html"><span class="num">6</span><h3>Comprendre une facture ou un courrier administratif</h3><p>3. Pour toute décision engageant de l'argent ou une démarche officielle, fais relire le document par un professionnel.</p></a><a class="card" href="tutoriels/07-donnees.html"><span class="num">7</span><h3>Garder ses données en sécurité</h3><p></p></a></div></section></main>
+<footer><span>© Sarah · Textes et dessins originaux</span><span>Contenus à relire avant publication</span></footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sarah · Bandes dessinées, applications et tutoriels</title>
+<meta name="description" content="Bandes dessinées, applications et tutoriels pour comprendre l'IA au quotidien.">
+<meta name="color-scheme" content="light">
+<style>
+a.card { color: inherit; text-decoration: none; transition: border-color .2s, transform .2s; }
+a.card:hover { border-color: var(--accent); transform: translateY(-2px); }
+a.card:focus-visible { outline: 3px solid var(--sage); outline-offset: 3px; }
+.back { font-family: system-ui, sans-serif; font-size: .92rem; }
+.article { max-width: 680px; margin: 0 auto; padding: 48px 0 72px; }
+.article h1 { font-size: clamp(2rem, 4.5vw, 2.6rem); line-height: 1.2; font-weight: 700; margin: 14px 0 26px; }
+.article h2 { font-size: 1.3rem; margin: 28px 0 10px; }
+.article p, .article li { margin-bottom: 12px; }
+.article ul, .article ol { padding-left: 22px; margin-bottom: 14px; }
+.article .box { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 22px; margin: 24px 0; }
+.stack { display: grid; gap: 16px; }
+
+  :root {
+    --bg: #fbf8f3;
+    --surface: #ffffff;
+    --ink: #1f1d24;
+    --ink-soft: #4a4754;
+    --muted: #6b6775;
+    --accent: #b8553a;
+    --accent-ink: #ffffff;
+    --sage: #56775a;
+    --line: #e7e0d3;
+    --radius: 14px;
+    --max: 1040px;
+    --space: clamp(56px, 8vw, 104px);
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  * { margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 1.0625rem;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  img { display: block; max-width: 100%; height: auto; }
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:focus-visible, .btn:focus-visible { outline: 3px solid var(--sage); outline-offset: 3px; border-radius: 6px; }
+
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+  .sans { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+  /* En-tête */
+  .top { display: flex; align-items: center; justify-content: space-between; padding: 22px 0; }
+  .brand { font-family: system-ui, sans-serif; font-weight: 700; font-size: 1rem; text-decoration: none; color: var(--ink); }
+  .nav { display: flex; gap: 22px; font-family: system-ui, sans-serif; font-size: .92rem; }
+  .nav a { color: var(--ink-soft); text-decoration: none; }
+  .nav a:hover { color: var(--accent); }
+  @media (max-width: 620px) { .nav { display: none; } }
+
+  /* Accueil */
+  .hero { padding: clamp(48px, 9vw, 96px) 0 var(--space); display: grid; gap: 28px; }
+  .eyebrow { font-family: system-ui, sans-serif; font-size: .82rem; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--accent); }
+  h1 { font-size: clamp(2.25rem, 5.2vw, 3.4rem); line-height: 1.12; font-weight: 700; letter-spacing: -0.01em; max-width: 18ch; }
+  .lead { font-size: 1.2rem; color: var(--ink-soft); max-width: 58ch; }
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+  .btn {
+    display: inline-flex; align-items: center; min-height: 46px; padding: 0 22px; border-radius: 999px;
+    font-family: system-ui, sans-serif; font-weight: 600; font-size: .95rem; text-decoration: none;
+    border: 1.5px solid var(--ink); color: var(--ink); transition: background .2s, color .2s;
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .btn.primary:hover { background: #9f452d; border-color: #9f452d; }
+  .btn:not(.primary):hover { background: var(--ink); color: var(--bg); }
+
+  /* Sections */
+  section { padding: var(--space) 0; border-top: 1px solid var(--line); }
+  .head { display: grid; gap: 10px; margin-bottom: 36px; max-width: 60ch; }
+  h2 { font-size: clamp(1.6rem, 3vw, 2.1rem); line-height: 1.2; font-weight: 700; letter-spacing: -0.005em; }
+  .kicker { font-family: system-ui, sans-serif; font-size: .8rem; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--sage); }
+  .sub { color: var(--muted); }
+
+  .feature { display: grid; gap: 36px; align-items: center; }
+  @media (min-width: 800px) { .feature { grid-template-columns: 1.1fr 1fr; } .feature.flip { grid-template-columns: 1fr 1.1fr; } .feature.flip > :first-child { order: 2; } }
+  .frame { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); background: var(--surface); }
+  .frame img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+
+  .cards { display: grid; gap: 16px; grid-template-columns: 1fr; }
+  @media (min-width: 640px) { .cards { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 960px) { .cards.three { grid-template-columns: repeat(3, 1fr); } }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; display: grid; gap: 8px; align-content: start; }
+  .card h3 { font-size: 1.1rem; line-height: 1.3; font-weight: 700; }
+  .card p { color: var(--muted); font-size: .98rem; }
+  .num { font-family: system-ui, sans-serif; font-size: .8rem; font-weight: 700; color: var(--accent); }
+  .pill { justify-self: start; font-family: system-ui, sans-serif; font-size: .75rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: #efe9dc; color: var(--ink-soft); }
+
+  .quote { border-left: 3px solid var(--accent); padding: 4px 0 4px 22px; font-size: 1.2rem; color: var(--ink-soft); max-width: 60ch; }
+
+  .contact { background: var(--ink); color: var(--bg); border-radius: 20px; padding: clamp(32px, 6vw, 56px); display: grid; gap: 14px; }
+  .contact h2 { color: var(--bg); }
+  .contact p { color: #d8d3c9; max-width: 56ch; }
+  .contact .btn { border-color: var(--bg); color: var(--bg); }
+  .contact .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .contact .btn:not(.primary):hover { background: var(--bg); color: var(--ink); }
+
+  footer { padding: 40px 0 56px; font-family: system-ui, sans-serif; font-size: .88rem; color: var(--muted); border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .btn { transition: none; } }
+
+/* Structure inspirée du composant « Agency Hero Section » (ShadcnSpace, licence MIT) :
+   https://21st.dev/@shadcnspace/components/hero-01 — rendu refait en HTML/CSS. */
+.top { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(6px); margin: 0 -24px; padding: 18px 24px; border-bottom: 1px solid var(--line); }
+.rise { animation: rise .8s ease-out both; }
+.rise.d2 { animation-delay: .12s; }
+.rise.d3 { animation-delay: .24s; }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.trust { display: flex; align-items: center; gap: 12px; font-family: system-ui, sans-serif; font-size: .92rem; color: var(--muted); }
+.stars { color: var(--accent); letter-spacing: 2px; }
+.marquee { overflow: hidden; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 16px 0; margin-top: 8px; }
+.marquee-track { display: flex; gap: 48px; width: max-content; animation: scroll 38s linear infinite; font-family: system-ui, sans-serif; font-weight: 600; color: var(--ink-soft); font-size: 1rem; white-space: nowrap; }
+.marquee:hover .marquee-track { animation-play-state: paused; }
+@keyframes scroll { to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .rise, .marquee-track { animation: none; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="#accueil">Sarah</a>
+    <nav class="nav" aria-label="Navigation principale">
+      <a href="#bd">Bandes dessinées</a>
+      <a href="#apps">Applications</a>
+      <a href="#tutoriels">Tutoriels</a>
+      <a href="#contact">Contact</a>
+    </nav>
+  </header>
+
+  <main>
+    <section id="accueil" class="hero" style="border-top:0">
+      <p class="eyebrow rise">Bandes dessinées · Applications · Tutoriels</p>
+      <h1 class="rise d2">Des histoires dessinées, et l'IA expliquée simplement.</h1>
+      <p class="lead rise d2">Je crée des bandes dessinées de science-fiction avec l'aide de l'IA, je développe de petits outils utiles, et je partage des tutoriels pour qui veut comprendre ces outils sans se perdre.</p>
+      <div class="actions rise d3">
+        <a class="btn primary" href="bd.html">Découvrir mes BD</a>
+        <a class="btn" href="tutoriels.html">Voir les tutoriels</a>
+      </div>
+      <div class="trust rise d3"><span class="stars" aria-hidden="true">★★★★★</span><span>Sept tutoriels, des outils testés, et des BD en cours</span></div>
+    </section>
+    <div class="marquee" aria-label="Thèmes">
+      <div class="marquee-track" aria-hidden="true">
+        <span>Science-fiction</span><span>ARIA</span><span>Tutoriels IA</span><span>Automatisation</span><span>Héros Infinis</span><span>Devis et factures</span>
+        <span>Science-fiction</span><span>ARIA</span><span>Tutoriels IA</span><span>Automatisation</span><span>Héros Infinis</span><span>Devis et factures</span>
+      </div>
+    </div>
+
+    <section id="bd">
+      <div class="feature">
+        <div class="frame">
+          <img src="https://d8j0ntlcm91z4.cloudfront.net/user_2xKcDsNYg09RN4CHD6v7YrHTJvz/hf_20261026_035342_7b9156b3-f8af-4114-ad28-7823af8f34d9.png" alt="Ville futuriste au coucher du soleil">
+        </div>
+        <div class="head">
+          <p class="kicker">Bandes dessinées</p>
+          <h2>Héros Infinis</h2>
+          <p class="sub">Une bande dessinée de science-fiction. Les personnages sont nés d'un dialogue entre moi et l'IA, mais chaque choix de scénario et de cadrage reste le mien.</p>
+          <p class="pill">En cours</p>
+        </div>
+      </div>
+      <div class="cards" style="margin-top:28px">
+        <a class="card" href="bd.html#robots">
+          <h3>Robots et humanité</h3>
+          <p>Des machines qui doivent choisir entre obéir et comprendre ce qui compte vraiment.</p>
+        </a>
+      </div>
+    </section>
+
+    <section id="apps">
+      <div class="head">
+        <p class="kicker">Applications</p>
+        <h2>Des outils pour un besoin précis</h2>
+        <p class="sub">Des applications petites et utiles, conçues avec l'aide de l'IA.</p>
+      </div>
+      <div class="cards three">
+        <a class="card" href="apps.html#aria">
+          <span class="num">01</span>
+          <h3>ARIA, assistant personnel</h3>
+          <p>Un assistant local : chat en streaming, plusieurs fournisseurs d'IA au choix, voix française, agenda Google et quiz.</p>
+        </a>
+        <a class="card" href="apps.html#outils">
+          <span class="num">02</span>
+          <h3>Outils de la vie courante</h3>
+          <p>Des petits outils pour classer, relancer et organiser, sans configuration compliquée.</p>
+        </a>
+        <a class="card" href="apps.html#automatisations">
+          <span class="num">03</span>
+          <h3>Automatisations</h3>
+          <p>Relier un formulaire à un tableur, envoyer un e-mail de confirmation, sans écrire de code.</p>
+        </a>
+      </div>
+    </section>
+
+    <section id="tutoriels">
+      <div class="feature flip">
+        <div class="frame">
+          <img src="https://d8j0ntlcm91z4.cloudfront.net/user_2xKcDsNYg09RN4CHD6v7YrHTJvz/hf_20261026_035342_8c7c472a-5a5a-4d5f-a0f0-3e7091c07f73.png" alt="Artisan dans un atelier lumineux">
+        </div>
+        <div class="head">
+          <p class="kicker">Tutoriels</p>
+          <h2>L'IA au quotidien, en une page</h2>
+          <p class="sub">Des méthodes courtes, pour vous ou pour votre métier. Chacune se lit en moins de cinq minutes.</p>
+        </div>
+      </div>
+      <div class="cards three" style="margin-top:36px">
+        <a class="card" href="tutoriels/01-comprendre-ia.html"><span class="num">01</span><h3>Comprendre l'IA en deux minutes</h3><p>Ce qu'elle sait faire, et ce qu'elle ne sait pas faire.</p></a>
+        <a class="card" href="tutoriels/02-formuler.html"><span class="num">02</span><h3>Bien formuler une demande</h3><p>Rôle, tâche, informations, format : quatre éléments qui changent tout.</p></a>
+        <a class="card" href="tutoriels/03-devis.html"><span class="num">03</span><h3>Devis et factures plus vite</h3><p>Des notes en vrac transformées en devis propre, à relire avant envoi.</p></a>
+        <a class="card" href="tutoriels/04-repondre.html"><span class="num">04</span><h3>Répondre aux clients</h3><p>Trois réponses possibles à partir du message reçu.</p></a>
+        <a class="card" href="tutoriels/05-semaine.html"><span class="num">05</span><h3>Organiser la semaine</h3><p>Un brouillon d'agenda qui tient compte des trajets.</p></a>
+        <a class="card" href="tutoriels/07-donnees.html"><span class="num">06</span><h3>Protéger ses données</h3><p>Les réflexes à garder avant de coller un document dans une IA.</p></a>
+      </div>
+    </section>
+
+    <section>
+      <p class="quote">Je garde la main sur chaque choix : l'IA propose, je décide.</p>
+    </section>
+
+    <section id="contact" style="border-top:0; padding-top:0">
+      <div class="contact">
+        <p class="kicker" style="color:#d8d3c9">Contact</p>
+        <h2>Une idée, une question, une envie d'échanger ?</h2>
+        <p>Écrivez-moi pour parler d'une BD, d'un tutoriel, ou de la façon dont l'IA peut vous simplifier une tâche.</p>
+        <div class="actions"><a class="btn primary" href="mailto:contact@exemple.fr">Écrire à Sarah</a></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>© Sarah · Textes et dessins originaux</span>
+    <span>Contenus à relire avant publication</span>
+  </footer>
+</div>
+
+</body>
+</html>
