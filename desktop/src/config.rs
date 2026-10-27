@@ -48,37 +48,55 @@ pub fn load_from(path: &std::path::Path) -> Config {
     std::fs::read_to_string(path).ok().and_then(|text| serde_json::from_str(&text).ok()).unwrap_or_default()
 }
 
+/// Écrit la configuration sans jamais laisser la clé dans un fichier lisible par d'autres : le contenu part dans un fichier
+/// temporaire dont les droits sont restreints AVANT l'écriture, puis il remplace le fichier final. En cas d'échec, rien n'est laissé.
 pub fn save_to(path: &std::path::Path, config: &Config) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("Dossier de configuration impossible : {e}"))?;
     }
     let text = serde_json::to_string_pretty(config).map_err(|e| e.to_string())?;
-    std::fs::write(path, text).map_err(|e| format!("Enregistrement impossible : {e}"))?;
+    let tmp = path.with_extension("json.tmp");
+    let _ = std::fs::remove_file(&tmp);
+    let result = (|| {
+        std::fs::File::create(&tmp).map_err(|e| format!("Enregistrement impossible : {e}"))?;
+        restrict_to_current_user(&tmp)?;
+        std::fs::write(&tmp, text).map_err(|e| format!("Enregistrement impossible : {e}"))?;
+        std::fs::rename(&tmp, path).map_err(|e| format!("Enregistrement impossible : {e}"))
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
+}
+
+/// Restreint le fichier à l'utilisateur courant : 0600 sous Unix ; sous Windows, retire l'héritage des droits
+/// et ne donne l'accès qu'à `USERNAME`. Échoue si les droits ne peuvent pas être restreints.
+fn restrict_to_current_user(path: &std::path::Path) -> Result<(), String> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+            .map_err(|e| format!("Droits du fichier de configuration impossibles : {e}"))
     }
     #[cfg(windows)]
-    restrict_to_current_user(path)?;
-    Ok(())
-}
-
-/// Sous Windows, retire l'héritage des droits et ne laisse que l'utilisateur courant lire le fichier (la clé du contrôleur y figure).
-/// Échoue si les droits ne peuvent pas être restreints : mieux vaut ne pas laisser une clé lisible par tout le monde.
-#[cfg(windows)]
-fn restrict_to_current_user(path: &std::path::Path) -> Result<(), String> {
-    let user = std::env::var("USERNAME").map_err(|_| "Droits du fichier de configuration : utilisateur inconnu.".to_string())?;
-    let status = std::process::Command::new("icacls")
-        .arg(path)
-        .args(["/inheritance:r", "/grant:r"])
-        .arg(format!("{user}:F"))
-        .status()
-        .map_err(|e| format!("Droits du fichier de configuration impossibles : {e}"))?;
-    if status.success() {
+    {
+        let user = std::env::var("USERNAME").map_err(|_| "Droits du fichier de configuration : utilisateur inconnu.".to_string())?;
+        let status = std::process::Command::new("icacls")
+            .arg(path)
+            .args(["/inheritance:r", "/grant:r"])
+            .arg(format!("{user}:F"))
+            .status()
+            .map_err(|e| format!("Droits du fichier de configuration impossibles : {e}"))?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err("Droits du fichier de configuration impossibles à restreindre.".into())
+        }
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = path;
         Ok(())
-    } else {
-        Err("Droits du fichier de configuration impossibles à restreindre.".into())
     }
 }
 
@@ -106,6 +124,17 @@ mod tests {
         assert!(config.configured() && config.hosts());
         assert!(!Config::default().hosts(), "par défaut : contrôler seulement (comme avant)");
         assert_eq!(serde_json::from_str::<Config>(r#"{"server":"s","key":"k"}"#).unwrap().mode, "control", "une ancienne configuration reste en mode contrôle");
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn saving_replaces_the_file_and_leaves_no_temporary_copy_behind() {
+        let dir = std::env::temp_dir().join(format!("aria-remote-desktop-atomic-{}", std::process::id()));
+        let file = dir.join("config.json");
+        save_to(&file, &Config { server: "a".into(), key: "k1".into(), ..Config::default() }).unwrap();
+        save_to(&file, &Config { server: "b".into(), key: "k2".into(), ..Config::default() }).unwrap();
+        assert_eq!(load_from(&file).key, "k2", "la nouvelle configuration remplace l'ancienne");
+        assert!(!dir.join("config.json.tmp").exists(), "aucune copie temporaire ne reste");
         std::fs::remove_dir_all(dir).ok();
     }
 }
