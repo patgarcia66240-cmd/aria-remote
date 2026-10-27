@@ -59,7 +59,27 @@ pub fn save_to(path: &std::path::Path, config: &Config) -> Result<(), String> {
         use std::os::unix::fs::PermissionsExt;
         let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
     }
+    #[cfg(windows)]
+    restrict_to_current_user(path)?;
     Ok(())
+}
+
+/// Sous Windows, retire l'héritage des droits et ne laisse que l'utilisateur courant lire le fichier (la clé du contrôleur y figure).
+/// Échoue si les droits ne peuvent pas être restreints : mieux vaut ne pas laisser une clé lisible par tout le monde.
+#[cfg(windows)]
+fn restrict_to_current_user(path: &std::path::Path) -> Result<(), String> {
+    let user = std::env::var("USERNAME").map_err(|_| "Droits du fichier de configuration : utilisateur inconnu.".to_string())?;
+    let status = std::process::Command::new("icacls")
+        .arg(path)
+        .args(["/inheritance:r", "/grant:r"])
+        .arg(format!("{user}:F"))
+        .status()
+        .map_err(|e| format!("Droits du fichier de configuration impossibles : {e}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err("Droits du fichier de configuration impossibles à restreindre.".into())
+    }
 }
 
 pub fn load() -> Config {
