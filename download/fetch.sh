@@ -80,7 +80,7 @@ if [ -n "${latest}" ]; then
   dcached="$(ensure desktop "${dver}" "${latest}" aria-remote-desktop.exe)"
   place "${dcached}" desktop/aria-remote-desktop.exe
   dsum="$(cut -d' ' -f1 "${dcached}.sha256")"; dsize="$(du -h "${dcached}" | cut -f1)"
-  printf '<a class="cta small" href="/remote/desktop/aria-remote-desktop.exe" download><svg class="i"><use href="#i-download"/></svg>Télécharger pour Windows</a>\n<p class="meta">Version %s · %s · aucune installation</p>\n<code class="hash" title="Empreinte SHA-256">%s</code>\n' "${dver}" "${dsize}" "${dsum}" > desktop.html
+  printf '<a class="cta small" href="/remote/desktop/aria-remote-desktop.exe" download>Télécharger pour Windows</a>\n<p class="meta">Version %s · %s · aucune installation</p>\n<code class="hash" title="Empreinte SHA-256">%s</code>\n' "${dver}" "${dsize}" "${dsum}" > desktop.html
   echo "Application de bureau ${dver}."
 else
   printf '<span class="soon"><svg class="i"><use href="#i-play"/></svg>Bientôt disponible</span>\n<p class="meta">Elle est en cours de développement.</p>\n' > desktop.html
