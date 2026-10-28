@@ -78,14 +78,45 @@ pub fn save(path: &Path, config: &Config) -> Result<()> {
 
 pub const DEFAULT_SERVER: &str = "http://127.0.0.1:8000";
 
-/// Adresse normalisée : schéma ajouté si absent (http par défaut), pas de « / » final. None si vide ou si le schéma n'est pas http(s).
+/// Hôte joignable seulement sur le réseau local (le seul cas où http:// est acceptable : la clé ne traverse pas Internet).
+pub fn is_local_host(host: &str) -> bool {
+    if host == "localhost" || host == "127.0.0.1" || host.ends_with(".local") {
+        return true;
+    }
+    let parts: Vec<&str> = host.split('.').collect();
+    let octets: Vec<u8> = parts.iter().filter_map(|p| p.parse().ok()).collect();
+    parts.len() == 4 && octets.len() == 4 && match (octets[0], octets[1]) {
+        (10, _) | (192, 168) => true,
+        (172, second) => (16..=31).contains(&second),
+        _ => false,
+    }
+}
+
+/// Adresse normalisée. https par défaut ; http seulement vers un hôte local ; None si vide, si le schéma n'est pas http(s),
+/// ou si http:// viserait Internet (la clé d'agent ne doit jamais voyager en clair). Même règle que desktop/src/client.rs.
 pub fn normalize_server(raw: &str) -> Option<String> {
     let raw = raw.trim().trim_end_matches('/');
     if raw.is_empty() {
         return None;
     }
-    let with_scheme = if raw.contains("://") { raw.to_string() } else { format!("http://{raw}") };
-    (with_scheme.starts_with("http://") || with_scheme.starts_with("https://")).then_some(with_scheme)
+    let (scheme, rest) = match raw.split_once("://") {
+        Some((scheme, rest)) if scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https") => (scheme.to_ascii_lowercase(), rest),
+        Some(_) => return None,
+        None => (String::new(), raw),
+    };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host = authority.rsplit('@').next().unwrap_or("").split(':').next().unwrap_or("");
+    if host.is_empty() || rest.contains(char::is_whitespace) {
+        return None;
+    }
+    let local = is_local_host(host);
+    let scheme = match scheme.as_str() {
+        "http" if !local => return None,
+        "" if local => "http",
+        "" => "https",
+        other => other,
+    };
+    Some(format!("{scheme}://{rest}"))
 }
 
 /// Adresse et clé à utiliser : ligne de commande > valeurs retenues > question posée à l'utilisateur (`ask`, None si pas de terminal) > défaut local.
@@ -107,7 +138,8 @@ pub fn resolve_connection(cli_server: Option<String>, cli_key: Option<String>, c
     if let Some(key) = &key {
         if config.api_key.as_ref() != Some(key) { config.api_key = Some(key.clone()); changed = true; }
     }
-    let server = server.or_else(|| config.server.clone()).unwrap_or_else(|| DEFAULT_SERVER.to_string());
+    // Une adresse retenue par une ancienne version (http vers Internet) est refusée à l'usage, comme une saisie neuve.
+    let server = server.or_else(|| config.server.clone().and_then(|saved| normalize_server(&saved))).unwrap_or_else(|| DEFAULT_SERVER.to_string());
     (server, config.api_key.clone().unwrap_or_default(), changed)
 }
 
@@ -142,6 +174,29 @@ mod tests {
         assert_eq!(normalize_server("  https://aria.example/ ").as_deref(), Some("https://aria.example"));
         assert_eq!(normalize_server("ftp://x"), None);
         assert_eq!(normalize_server("   "), None);
+    }
+
+    #[test]
+    fn internet_servers_always_use_https_and_the_key_never_travels_in_clear() {
+        // sans schéma : https, pas http
+        assert_eq!(normalize_server("rendezvous.example.fr").as_deref(), Some("https://rendezvous.example.fr"));
+        // http explicite vers Internet : refusé
+        assert_eq!(normalize_server("http://rendezvous.example.fr"), None);
+        assert_eq!(normalize_server("HTTP://rendezvous.example.fr/"), None);
+        // http reste permis sur le réseau local
+        assert_eq!(normalize_server("http://localhost:8000").as_deref(), Some("http://localhost:8000"));
+        assert_eq!(normalize_server("10.0.0.5").as_deref(), Some("http://10.0.0.5"));
+        assert_eq!(normalize_server("172.20.1.1:8000").as_deref(), Some("http://172.20.1.1:8000"));
+        // 172.32.x.x n'est pas un réseau privé : https
+        assert_eq!(normalize_server("172.32.1.1").as_deref(), Some("https://172.32.1.1"));
+    }
+
+    #[test]
+    fn a_saved_internet_http_address_is_not_used() {
+        let mut config = blank();
+        config.server = Some("http://rendezvous.example.fr".into());
+        let (server, _, _) = resolve_connection(None, None, &mut config, &mut || None);
+        assert_eq!(server, DEFAULT_SERVER);
     }
 
     #[test]

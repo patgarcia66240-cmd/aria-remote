@@ -22,4 +22,5 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s \
   CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/health' % os.environ.get('PORT', '8080'), timeout=4)" || exit 1
 
 # --proxy-headers : derrière Caddy ou l'hébergeur, l'adresse du client vient de X-Forwarded-For (limite d'essais d'appairage par client, pas par proxy).
-CMD ["sh", "-c", "exec uvicorn app:app --host 0.0.0.0 --port ${PORT} --proxy-headers --forwarded-allow-ips '*'"]
+# FORWARDED_ALLOW_IPS : adresse du proxy (Caddy, Traefik). Défaut 127.0.0.1 = on ne fait confiance à aucun en-tête X-Forwarded-For.
+CMD ["sh", "-c", "exec uvicorn app:app --host 0.0.0.0 --port ${PORT} --proxy-headers --forwarded-allow-ips ${FORWARDED_ALLOW_IPS:-127.0.0.1}"]

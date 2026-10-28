@@ -6,5 +6,8 @@
 		X-Content-Type-Options "nosniff"
 		-Server
 	}
-	reverse_proxy rendezvous:8080
+	reverse_proxy rendezvous:8080 {
+		# Remplace (ne complète pas) X-Forwarded-For : un client ne peut pas falsifier son IP pour contourner la limite d'essais.
+		header_up X-Forwarded-For {remote_host}
+	}
 }

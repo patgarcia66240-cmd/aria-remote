@@ -10,6 +10,8 @@ services:
     environment:
       RENDEZVOUS_AGENT_KEY: ${RENDEZVOUS_AGENT_KEY:?Définis RENDEZVOUS_AGENT_KEY dans .env}
       RENDEZVOUS_CONTROLLER_KEY: ${RENDEZVOUS_CONTROLLER_KEY:?Définis RENDEZVOUS_CONTROLLER_KEY dans .env}
+      # Seul Caddy (IP fixe ci-dessous) est autorisé à fournir l'IP réelle du client (X-Forwarded-For).
+      FORWARDED_ALLOW_IPS: 172.28.0.10
       # Relais : l'agent et le navigateur reçoivent ces serveurs à chaque session (identifiants coturn éphémères dérivés de TURN_SECRET).
       REMOTE_STUN_URLS: stun:${DOMAIN:?Définis DOMAIN dans .env}:3478
       REMOTE_TURN_URLS: turn:${DOMAIN}:3478?transport=udp,turn:${DOMAIN}:3478?transport=tcp
@@ -20,6 +22,9 @@ services:
       - rendezvous-data:/app/backend/data
     expose:
       - "8080"
+    networks:
+      edge:
+        ipv4_address: 172.28.0.20
 
   caddy:
     image: caddy:2
@@ -34,8 +39,12 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
+    networks:
+      edge:
+        ipv4_address: 172.28.0.10
 
   # Relais réseau pour les connexions qui ne peuvent pas être directes. network_mode: host : coturn ouvre une grande plage de ports UDP.
+  # EXTERNAL_IP (facultatif, dans .env) : IP publique du serveur si elle n'est pas configurée sur sa carte réseau (VPS derrière NAT).
   coturn:
     image: coturn/coturn:4
     restart: unless-stopped
@@ -57,7 +66,13 @@ services:
       --denied-peer-ip=169.254.0.0-169.254.255.255
       --denied-peer-ip=172.16.0.0-172.31.255.255
       --denied-peer-ip=192.168.0.0-192.168.255.255
-      # Serveur derrière un NAT (IP publique différente de celle de la machine) : ajoute  --external-ip=<IP publique>
+      ${EXTERNAL_IP:+--external-ip=${EXTERNAL_IP}}
+
+networks:
+  edge:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
 
 volumes:
   rendezvous-data:

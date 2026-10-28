@@ -1,7 +1,7 @@
 //! Signaling avec le backend (plugin remote) : enregistrement HTTP signé, puis WebSocket /api/remote/agent/ws. Le serveur ne voit passer que
 //! du texte de négociation (SDP, ICE) ; jamais l'écran ni les commandes.
 
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context, Result};
 use futures_util::{SinkExt, StreamExt};
@@ -14,6 +14,9 @@ use crate::config::Config;
 use crate::identity::{register_message, Identity};
 
 pub type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
+
+/// Délai maximal pour l'enregistrement et la poignée de main WebSocket : sans lui, un réseau muet bloque l'agent sans rien afficher.
+const NETWORK_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct IceServerConfig {
@@ -87,13 +90,14 @@ pub async fn register(server: &str, api_key: &str, config: &Config, identity: &I
         "nonce": nonce,
         "signature": identity.sign(&register_message(&config.device_id, &config.name, timestamp, &nonce)),
     });
-    let response = reqwest::Client::new()
+    let http = reqwest::Client::builder().timeout(NETWORK_TIMEOUT).build().context("client HTTP impossible")?;
+    let response = http
         .post(format!("{}/api/remote/devices/register", http_base(server)))
         .header("x-api-key", api_key)
         .json(&body)
         .send()
         .await
-        .context("serveur injoignable")?;
+        .context("serveur injoignable ou délai dépassé")?;
     let status = response.status();
     if !status.is_success() {
         let detail = response.text().await.unwrap_or_default();
@@ -106,7 +110,11 @@ pub async fn register(server: &str, api_key: &str, config: &Config, identity: &I
 pub async fn connect(server: &str, api_key: &str, device_id: &str) -> Result<Socket> {
     let mut request = websocket_url(server, device_id).into_client_request()?;
     request.headers_mut().insert("x-api-key", api_key.parse().context("clé d'API invalide")?);
-    match connect_async(request).await {
+    let attempt = match tokio::time::timeout(NETWORK_TIMEOUT, connect_async(request)).await {
+        Ok(attempt) => attempt,
+        Err(_) => bail!("connexion sans réponse après {} s : vérifie l'adresse et le pare-feu", NETWORK_TIMEOUT.as_secs()),
+    };
+    match attempt {
         Ok((socket, _)) => Ok(socket),
         Err(tokio_tungstenite::tungstenite::Error::Http(response)) if response.status().as_u16() == 401 => {
             bail!("clé d'API refusée par PC Assistant (401) : vérifie la clé saisie")

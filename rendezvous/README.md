@@ -32,8 +32,8 @@ docker compose up -d --build
 curl https://TON_DOMAINE/health        # {"status":"ok"}
 ```
 
-Si le serveur est derrière un NAT (IP publique différente de celle de la machine), ajoute `--external-ip=<IP publique>` à la commande de `coturn`
-dans `docker-compose.yml`.
+Si le serveur est derrière un NAT (IP publique absente de sa carte réseau), renseigne `EXTERNAL_IP=<IP publique>` dans `.env` : coturn l'annonce
+alors aux pairs (sans cela, le relais échoue sans message visible).
 
 ## Sur un VPS Hostinger (avec n8n déjà installé)
 
@@ -54,7 +54,7 @@ Le modèle « Ubuntu 24.04 with n8n » utilise **Traefik sur les ports 80 et 443
 4. **Installer** : `sudo ./install-vps.sh --domain rendezvous.mondomaine.fr` (ou `--sslip`). Teste d'abord avec `--dry-run` : il montre tout ce qui serait fait sans rien exécuter.
 5. Le script affiche à la fin les deux lignes à copier dans `backend/.env` (contrôleur) et la fenêtre de l'agent.
 
-Ports : `3478` (TCP et UDP) et `49152–65535` (UDP) servent au relais. Ils doivent être joignables depuis Internet. Si tu actives un jour le pare-feu
+Ports : `3478` (TCP et UDP) et `49152–65535` (UDP) servent au relais. Traefik n'ayant pas d'IP fixe, renseigne `FORWARDED_ALLOW_IPS` (IP de Traefik) dans `.env` pour que la limite d'essais repose sur la vraie IP du client ; sinon elle n'est pas fiable. Ils doivent être joignables depuis Internet. Si tu actives un jour le pare-feu
 Hostinger, ouvre-les, avec 80 et 443 (déjà utilisés par Traefik) et 22 (SSH).
 
 Les appareils appairés **sont conservés** (volume Docker) et le service ne s'endort pas.
@@ -108,7 +108,7 @@ Elles sont retenues. L'agent affiche ensuite un code à 6 chiffres : saisis-le d
 | --- | --- |
 | Quelqu'un trouve l'adresse du serveur | HTTPS ; toutes les routes exigent une clé ; pas de documentation publique ; `/health` ne dit rien |
 | Une clé d'agent fuit (PC contrôlé compromis) | La clé d'agent ne sert qu'à enregistrer un appareil et ouvrir le canal d'agent : pas de liste, pas d'appairage, pas de session |
-| Quelqu'un devine un code à 6 chiffres | 5 essais ratés = 1 minute de blocage, limite d'essais par client, code valable 30 minutes et à usage unique |
+| Quelqu'un devine un code à 6 chiffres | 5 essais ratés = 1 minute de blocage **pour tous les appareils** (verrou global), limite de 10 essais par minute et par client réel (l'IP vient de Caddy, qui remplace `X-Forwarded-For`), code valable 30 minutes et à usage unique |
 | Quelqu'un se fait passer pour un appareil | Chaque appareil prouve sa clé privée (signature) à l'enregistrement, à la connexion et pour chaque réponse de négociation |
 | Prise de contrôle à l'insu de l'utilisateur | Chaque session exige l'accord de la personne devant l'appareil, qui choisit aussi les permissions (souris, clavier) |
 | Le serveur est compromis | Il ne voit ni l'écran ni les commandes (WebRTC chiffré) ; il ne peut pas signer à la place d'un appareil |
