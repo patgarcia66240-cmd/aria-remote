@@ -21,6 +21,17 @@ services:
       - traefik.http.routers.pc-download.tls=true
       - traefik.http.routers.pc-download.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-mytlschallenge}
       - traefik.http.services.pc-download.loadbalancer.server.port=80
+      # xendev.eu/remote : même page, servie sous /remote/ (le préfixe est retiré avant nginx). Pas de redirection vers processxen.com.
+      - traefik.http.routers.pc-download-xendev.rule=Host(`xendev.eu`) && PathPrefix(`/remote`)
+      - traefik.http.routers.pc-download-xendev.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.pc-download-xendev.tls=true
+      - traefik.http.routers.pc-download-xendev.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-mytlschallenge}
+      - traefik.http.routers.pc-download-xendev.service=pc-download
+      - traefik.http.routers.pc-download-xendev.middlewares=pc-download-slash,pc-download-strip
+      - traefik.http.middlewares.pc-download-slash.redirectregex.regex=^https://xendev\.eu/remote$$
+      - traefik.http.middlewares.pc-download-slash.redirectregex.replacement=https://xendev.eu/remote/
+      - traefik.http.middlewares.pc-download-slash.redirectregex.permanent=false
+      - traefik.http.middlewares.pc-download-strip.stripprefix.prefixes=/remote
 
 volumes:
   download-cache:

@@ -67,7 +67,7 @@ while [ "${i}" -lt "${count}" ]; do
     place "${cached}" remote-agent.exe
     echo "${ver}" > version.txt; echo "${sum}" > sha256.txt; echo "${size}" > size.txt
   fi
-  printf '<li class="ver"><span class="vn"><b>%s</b>%s</span><span class="vd">%s</span><span class="vs">%s</span><code class="vh" title="Empreinte SHA-256">%s</code><a class="vl" href="/versions/%s/remote-agent.exe" download>Télécharger</a></li>\n' \
+  printf '<li class="ver"><span class="vn"><b>%s</b>%s</span><span class="vd">%s</span><span class="vs">%s</span><code class="vh" title="Empreinte SHA-256">%s</code><a class="vl" href="versions/%s/remote-agent.exe" download>Télécharger</a></li>\n' \
     "${ver}" "${badge}" "${day}" "${size}" "${sum}" "${ver}" >> rows.html
   i=$((i + 1))
 done
@@ -80,7 +80,7 @@ if [ -n "${latest}" ]; then
   dcached="$(ensure desktop "${dver}" "${latest}" aria-remote-desktop.exe)"
   place "${dcached}" desktop/aria-remote-desktop.exe
   dsum="$(cut -d' ' -f1 "${dcached}.sha256")"; dsize="$(du -h "${dcached}" | cut -f1)"
-  printf '<a class="cta small" href="/desktop/aria-remote-desktop.exe" download><svg class="i"><use href="#i-download"/></svg>Télécharger pour Windows</a>\n<p class="meta">Version %s · %s · aucune installation</p>\n<code class="hash" title="Empreinte SHA-256">%s</code>\n' "${dver}" "${dsize}" "${dsum}" > desktop.html
+  printf '<a class="cta small" href="desktop/aria-remote-desktop.exe" download><svg class="i"><use href="#i-download"/></svg>Télécharger pour Windows</a>\n<p class="meta">Version %s · %s · aucune installation</p>\n<code class="hash" title="Empreinte SHA-256">%s</code>\n' "${dver}" "${dsize}" "${dsum}" > desktop.html
   echo "Application de bureau ${dver}."
 else
   printf '<span class="soon"><svg class="i"><use href="#i-play"/></svg>Bientôt disponible</span>\n<p class="meta">Elle est en cours de développement.</p>\n' > desktop.html
