@@ -212,16 +212,16 @@
 
 <script>
 const $ = (id) => document.getElementById(id)
-const params = new URLSearchParams(location.search)
-const TOKEN = params.get('t') || sessionStorage.getItem('t') || ''
-if (params.get('t')) { sessionStorage.setItem('t', TOKEN); history.replaceState(null, '', location.pathname) }
+// Ticket à usage unique (60 s) donné à l'ouverture : il est échangé contre un cookie HttpOnly, puis retiré de l'adresse.
+const TICKET = new URLSearchParams(location.search).get('k') || ''
+if (TICKET) history.replaceState(null, '', location.pathname)
 
 const LABEL = { view_screen: 'Voir l\'écran', control_mouse: 'Souris', control_keyboard: 'Clavier et presse-papiers' }
 const LINK = { connecting: ['warn', 'Connexion…'], unpaired: ['warn', 'À appairer'], online: ['ok', 'En ligne'], error: ['bad', 'Hors ligne'], setup: ['warn', 'À configurer'] }
 let state = null, editingSetup = false, dirty = { allow: 0 }
 
 async function call(path, body) {
-  const response = await fetch(path, { method: body === undefined ? 'GET' : 'POST', headers: { 'x-token': TOKEN, 'content-type': 'application/json' },
+  const response = await fetch(path, { method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body) })
   if (!response.ok) throw new Error(response.status)
   return response.status === 204 ? null : response.json()
@@ -314,7 +314,13 @@ $('quit-confirm').onclick = () => {
 const sendAllow = () => { dirty.allow = Date.now(); act('/api/allow', { mouse: $('allow-mouse').checked, keyboard: $('allow-keyboard').checked }) }
 $('allow-mouse').onchange = $('allow-keyboard').onchange = sendAllow
 
-poll(); setInterval(poll, 700); setInterval(render, 1000)
+async function start() {
+  if (TICKET) {
+    await fetch('/api/login', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ticket: TICKET }) }).catch(() => {})
+  }
+  poll(); setInterval(poll, 700); setInterval(render, 1000)
+}
+start()
 </script>
 </body>
 </html>
