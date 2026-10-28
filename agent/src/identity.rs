@@ -51,6 +51,27 @@ pub fn answer_message(session_id: &str, offer: &str, answer: &str) -> Vec<u8> {
     format!("{PREFIX}|answer|{session_id}|{}|{}", sha256_hex(offer), sha256_hex(answer)).into_bytes()
 }
 
+/// Signature du contrôleur sur son offre (voir docs/SIGNATURE_CONTROLEUR.md) : liée à la session et à l'empreinte de l'offre.
+pub fn controller_offer_message(session_id: &str, offer: &str) -> Vec<u8> {
+    format!("{PREFIX}|controller-offer|{session_id}|{}", sha256_hex(offer)).into_bytes()
+}
+
+/// Empreinte lisible d'une clé publique (base64) : 16 caractères hexadécimaux, par groupes de 4, pour comparer deux écrans à l'œil.
+pub fn fingerprint(public_key: &str) -> Result<String> {
+    let raw = STANDARD.decode(public_key.trim()).context("clé publique illisible")?;
+    let digest = hex::encode(Sha256::digest(&raw));
+    let short = &digest[..16];
+    Ok(format!("{} {} {} {}", &short[0..4], &short[4..8], &short[8..12], &short[12..16]))
+}
+
+/// Vérifie qu'une offre a été signée par la clé du contrôleur acceptée à l'appairage. Renvoie false si la clé ou la signature est invalide.
+pub fn controller_offer_is_signed(controller_key: &str, session_id: &str, offer: &str, signature: &str) -> bool {
+    let (Ok(key_bytes), Ok(sig_bytes)) = (STANDARD.decode(controller_key.trim()), STANDARD.decode(signature.trim())) else { return false };
+    let (Ok(key), Ok(sig)) = (key_bytes.try_into().map(|b: [u8; 32]| b), ed25519_dalek::Signature::from_slice(&sig_bytes)) else { return false };
+    let Ok(verifying) = ed25519_dalek::VerifyingKey::from_bytes(&key) else { return false };
+    verifying.verify_strict(&controller_offer_message(session_id, offer), &sig).is_ok()
+}
+
 pub fn agent_auth_message(device_id: &str, nonce: &str) -> Vec<u8> {
     format!("{PREFIX}|agent|{device_id}|{nonce}").into_bytes()
 }
@@ -88,5 +109,27 @@ mod tests {
         assert_eq!(sha256_hex("abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
         let answer = String::from_utf8(answer_message("sess_x", "offre", "reponse")).unwrap();
         assert_eq!(answer, format!("pc-assistant-remote-v1|answer|sess_x|{}|{}", sha256_hex("offre"), sha256_hex("reponse")));
+    }
+
+    #[test]
+    fn a_controller_offer_is_accepted_only_with_its_own_key_and_the_same_offer() {
+        let controller = Identity::from_seed(&STANDARD.encode([9u8; 32])).unwrap();
+        let other = Identity::from_seed(&STANDARD.encode([4u8; 32])).unwrap();
+        let offer = "v=0 offre";
+        let signature = controller.sign(&controller_offer_message("sess_1", offer));
+        assert!(controller_offer_is_signed(&controller.public_key(), "sess_1", offer, &signature));
+        assert!(!controller_offer_is_signed(&other.public_key(), "sess_1", offer, &signature), "signée par une autre clé");
+        assert!(!controller_offer_is_signed(&controller.public_key(), "sess_1", "v=0 autre", &signature), "offre modifiée");
+        assert!(!controller_offer_is_signed(&controller.public_key(), "sess_2", offer, &signature), "rejouée sur une autre session");
+        assert!(!controller_offer_is_signed(&controller.public_key(), "sess_1", offer, ""), "pas de signature");
+    }
+
+    #[test]
+    fn the_fingerprint_is_stable_and_short_enough_to_compare_by_eye() {
+        let identity = Identity::from_seed(&STANDARD.encode([3u8; 32])).unwrap();
+        let fp = fingerprint(&identity.public_key()).unwrap();
+        assert_eq!(fp, fingerprint(&identity.public_key()).unwrap());
+        assert_eq!(fp.len(), 19);
+        assert!(fingerprint("pas-du-base64!").is_err());
     }
 }

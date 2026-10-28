@@ -13,7 +13,7 @@ use tokio::time::sleep;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 
 use crate::config::{self, Config};
-use crate::identity::{agent_auth_message, answer_message, Identity};
+use crate::identity::{self, agent_auth_message, answer_message, Identity};
 use crate::input::{InputSink, Permission};
 use crate::network::signaling::{self, ClientMessage, IceServerConfig, ServerMessage, Socket};
 use crate::network::webrtc::Peer;
@@ -392,7 +392,8 @@ impl Agent {
     async fn on_server(&mut self, message: ServerMessage, out: &Out, events: &mpsc::UnboundedSender<Event>) {
         match message {
             ServerMessage::OpenSession { session_id, permissions, ice_servers } => self.on_open_session(session_id, permissions, ice_servers, out, events),
-            ServerMessage::Offer { session_id, sdp } => {
+            ServerMessage::Offer { session_id, sdp, signature } => {
+                self.check_controller_offer(&session_id, &sdp, signature.as_deref());
                 if let Err(error) = self.on_offer(&session_id, sdp, out).await {
                     self.log(format!("négociation impossible : {error:#}"));
                 }
@@ -527,6 +528,18 @@ impl Agent {
             _ => println!("[agent] commandes : stop (couper la session), quit (arrêter l'agent)"),
         }
         false
+    }
+
+    /// Phase 2 (journalisation seule) : contrôle la signature du contrôleur sur l'offre et le consigne. NE REFUSE RIEN encore : le refus
+    /// viendra en phase 6, une fois tous les contrôleurs signés.
+    fn check_controller_offer(&mut self, session_id: &str, sdp: &str, signature: Option<&str>) {
+        let verdict = match (self.config.controller_key.as_deref(), signature) {
+            (None, _) => "clé du contrôleur inconnue : non vérifiable",
+            (Some(_), None) => "offre NON SIGNÉE",
+            (Some(key), Some(sig)) if identity::controller_offer_is_signed(key, session_id, sdp, sig) => "signature du contrôleur valide",
+            (Some(_), Some(_)) => "signature du contrôleur INVALIDE",
+        };
+        self.log(format!("session {session_id} : {verdict} (journalisation seule)"));
     }
 
     async fn on_offer(&mut self, session_id: &str, sdp: String, out: &Out) -> Result<()> {

@@ -32,7 +32,8 @@ pub enum ServerMessage {
     Challenge { nonce: String },
     Ready { #[serde(default)] ice_servers: Vec<IceServerConfig> },
     OpenSession { session_id: String, permissions: Vec<String>, #[serde(default)] ice_servers: Vec<IceServerConfig> },
-    Offer { session_id: String, sdp: String },
+    /// `signature` : signature du contrôleur sur son offre (facultative jusqu'à la phase 6 de docs/SIGNATURE_CONTROLEUR.md).
+    Offer { session_id: String, sdp: String, #[serde(default)] signature: Option<String> },
     Ice { session_id: String, candidate: String },
     Reconnect { session_id: String },
     CloseSession { session_id: String },

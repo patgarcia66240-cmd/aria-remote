@@ -23,6 +23,9 @@ pub struct Config {
     /// Permissions accordées en plus de la vue (« mouse,keyboard »), réglées dans la fenêtre de l'agent et retenues.
     #[serde(default)]
     pub allow: Option<String>,
+    /// Clé PUBLIQUE du contrôleur acceptée à l'appairage (phase 3 de docs/SIGNATURE_CONTROLEUR.md). Vide tant que l'appairage ne la transmet pas.
+    #[serde(default)]
+    pub controller_key: Option<String>,
 }
 
 pub fn default_path() -> PathBuf {
@@ -57,6 +60,7 @@ pub fn load_or_create(path: &Path, name: Option<&str>) -> Result<(Config, Identi
         seed: identity.seed(),
         server: None,
         api_key: None,
+        controller_key: None,
         allow: None,
     };
     save(path, &config)?;
@@ -165,7 +169,7 @@ mod tests {
     }
 
     fn blank() -> Config {
-        Config { device_id: "dev_0123456789abcdef".into(), name: "Salon".into(), seed: String::new(), server: None, api_key: None, allow: None }
+        Config { device_id: "dev_0123456789abcdef".into(), name: "Salon".into(), seed: String::new(), server: None, api_key: None, allow: None, controller_key: None }
     }
 
     #[test]
