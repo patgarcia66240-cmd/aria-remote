@@ -30,7 +30,8 @@ pub struct IceServerConfig {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMessage {
     Challenge { nonce: String },
-    Ready { #[serde(default)] ice_servers: Vec<IceServerConfig> },
+    /// `controller_pending` : clé publique d'un contrôleur qui attend d'être reconnue (phase 3b), absente tant qu'il n'y en a pas.
+    Ready { #[serde(default)] ice_servers: Vec<IceServerConfig>, #[serde(default)] controller_pending: Option<String> },
     OpenSession { session_id: String, permissions: Vec<String>, #[serde(default)] ice_servers: Vec<IceServerConfig> },
     /// `signature` : signature du contrôleur sur son offre (facultative jusqu'à la phase 6 de docs/SIGNATURE_CONTROLEUR.md).
     Offer { session_id: String, sdp: String, #[serde(default)] signature: Option<String> },
@@ -53,6 +54,8 @@ pub enum ClientMessage {
     Bye { session_id: String },
     /// L'agent revient après une coupure du WebSocket et sa session WebRTC est toujours vivante : on la reprend sans renégocier.
     Resume { session_id: String },
+    /// Décision de la personne sur le contrôleur en attente : `accepted` = clé retenue par l'agent.
+    ControllerDecision { accepted: bool },
     Ping,
 }
 
@@ -174,7 +177,7 @@ mod tests {
         assert_eq!(open, ServerMessage::OpenSession { session_id: "sess_1".into(), permissions: vec!["view_screen".into()],
                    ice_servers: vec![IceServerConfig { urls: vec!["stun:s:3478".into()], username: None, credential: None }] });
         let ready: ServerMessage = serde_json::from_str(r#"{"type":"ready"}"#).unwrap();
-        assert_eq!(ready, ServerMessage::Ready { ice_servers: vec![] });
+        assert_eq!(ready, ServerMessage::Ready { ice_servers: vec![], controller_pending: None });
         assert!(serde_json::from_str::<ServerMessage>(r#"{"type":"inconnu"}"#).is_err());
     }
 

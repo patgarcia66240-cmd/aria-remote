@@ -778,3 +778,14 @@ def test_the_offer_signature_is_relayed_unchanged_to_the_agent(remote):
     assert remote.gateway.offer_signatures == [signature]
     run(remote.service.submit_offer(connect_session.session_id, "v=0 offer 2"))
     assert remote.gateway.offer_signatures[-1] == "", "sans signature, rien n'est inventé"
+
+
+def test_a_controller_decision_clears_the_pending_key_on_the_server(remote):
+    agent = paired(remote)
+    controller = controller_public_key()
+    remote.store.get(DEVICE).controller_pending = controller
+    decided = remote.service.controller_decided(DEVICE, True)
+    assert decided.controller_pending is None and remote.audit.names()[-1] == "CONTROLLER_KEY_ACCEPTED"
+    remote.store.get(DEVICE).controller_pending = controller
+    assert remote.service.controller_decided(DEVICE, False).controller_pending is None
+    assert remote.audit.names()[-1] == "CONTROLLER_KEY_REFUSED"

@@ -84,6 +84,8 @@ pub struct Agent {
     pairing_until: Option<Instant>,
     /// Type de la machine annoncé au serveur (« windows », « windows-laptop »...) ; détecté au démarrage (platform.rs).
     platform: String,
+    /// Clé d'un contrôleur qui attend d'être reconnue (phase 3b) : elle n'est retenue qu'après confirmation de la personne.
+    pending_controller: Option<String>,
 }
 
 type Out = mpsc::UnboundedSender<ClientMessage>;
@@ -96,7 +98,7 @@ fn permission_names(set: &HashSet<Permission>) -> Vec<String> {
 
 impl Agent {
     pub fn new(options: Options, config: Config, identity: Identity, commands: mpsc::UnboundedReceiver<UiCommand>) -> Self {
-        Self { options, config, identity, commands, requests: HashMap::new(), active: None, awaiting_console: None, input: None, pairing_until: None, platform: std::env::consts::OS.to_string() }
+        Self { options, config, identity, commands, requests: HashMap::new(), active: None, awaiting_console: None, input: None, pairing_until: None, platform: std::env::consts::OS.to_string(), pending_controller: None }
     }
 
     fn shared_input(&mut self) -> Result<SharedInput> {
@@ -263,11 +265,12 @@ impl Agent {
         };
         let signature = self.identity.sign(&agent_auth_message(&self.config.device_id, &nonce));
         signaling::send(&mut socket, &ClientMessage::Auth { signature }).await?;
-        match signaling::receive(&mut socket).await {
-            Some(Ok(ServerMessage::Ready { .. })) => {}
+        let controller_pending = match signaling::receive(&mut socket).await {
+            Some(Ok(ServerMessage::Ready { controller_pending, .. })) => controller_pending,
             None => return Ok(Outcome::Refused),
             other => bail!("réponse inattendue du serveur : {other:?}"),
-        }
+        };
+        self.offer_controller_key(controller_pending);
         let (out, mut outgoing) = mpsc::unbounded_channel::<ClientMessage>();
         let _ = out.send(self.grant_message());
         println!("[agent] connecté à PC Assistant — « stop » coupe la session en cours, « quit » arrête l'agent.");
@@ -312,6 +315,41 @@ impl Agent {
         }
     }
 
+    /// Un contrôleur propose sa clé : on l'affiche avec son empreinte, sans la retenir. Une clé déjà reconnue n'est pas redemandée.
+    fn offer_controller_key(&mut self, key: Option<String>) {
+        let Some(key) = key.filter(|k| self.config.controller_key.as_deref() != Some(k.as_str())) else {
+            self.pending_controller = None;
+            self.ui(|s| s.controller_fingerprint = None);
+            return;
+        };
+        let Ok(fingerprint) = identity::fingerprint(&key) else {
+            self.log("clé de contrôleur illisible : ignorée");
+            return;
+        };
+        self.log(format!("un contrôleur demande à être reconnu — empreinte {fingerprint} : vérifie-la sur le bureau avant d'accepter"));
+        self.pending_controller = Some(key);
+        self.ui(move |s| s.controller_fingerprint = Some(fingerprint));
+    }
+
+    /// Décision de la personne : accepter enregistre la clé (les offres seront vérifiées), refuser la jette. Le serveur est prévenu dans les deux cas.
+    fn decide_controller(&mut self, accept: bool, out: Option<&Out>) {
+        let Some(key) = self.pending_controller.take() else {
+            self.log("aucun contrôleur en attente");
+            return;
+        };
+        if accept {
+            self.config.controller_key = Some(key);
+            self.save_config();
+            self.log("contrôleur reconnu : ses offres seront vérifiées");
+        } else {
+            self.log("contrôleur refusé");
+        }
+        self.ui(|s| s.controller_fingerprint = None);
+        if let Some(out) = out {
+            let _ = out.send(ClientMessage::ControllerDecision { accepted: accept });
+        }
+    }
+
     fn grant_message(&self) -> ClientMessage {
         ClientMessage::Grant { permissions: permission_names(&self.options.allow), platform: self.platform.clone() }
     }
@@ -319,6 +357,7 @@ impl Agent {
     // -- ordres de la fenêtre ------------------------------------------------------------------------------------------------
     async fn handle_command(&mut self, command: UiCommand, out: Option<&Out>) -> Flow {
         match command {
+            UiCommand::ControllerDecision { accept } => self.decide_controller(accept, out),
             UiCommand::Consent { session_id, accept } => {
                 if let Some(out) = out {
                     self.on_consent(session_id, accept, out);

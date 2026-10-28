@@ -166,7 +166,8 @@ async def agent_socket(websocket: WebSocket, device_id: str = Query(pattern=ID_P
 
     connection = AgentConnection(device_id, send, lambda: websocket.close(code=4000, reason="Remplacé par une nouvelle connexion."))
     await hub.attach(connection)
-    await websocket.send_json({"type": "ready", "ice_servers": ice.ice_servers(device_id)})
+    # La clé du contrôleur en attente (phase 3b) est proposée à la personne sur l'appareil : elle ne sert à rien tant qu'elle n'est pas acceptée.
+    await websocket.send_json({"type": "ready", "ice_servers": ice.ice_servers(device_id), "controller_pending": device.controller_pending})
     try:
         while True:
             text = await websocket.receive_text()
@@ -204,6 +205,8 @@ async def _agent_message(connection: AgentConnection, message: dict) -> None:
         service.agent_resumed(session_id, device_id)
     elif kind == "bye":
         service.agent_ended(session_id, device_id)
+    elif kind == "controller_decision":
+        service.controller_decided(device_id, bool(message.get("accepted")))
     elif kind != "ping":
         raise ValueError("type inconnu")
 

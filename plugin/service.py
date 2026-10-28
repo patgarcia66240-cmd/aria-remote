@@ -106,6 +106,14 @@ class RemoteService:
         self.audit.record("PAIRING_ACCEPTED", device_id=device_id, result="controller_key_pending" if controller_key else "ok")
         return device
 
+    def controller_decided(self, device_id: str, accepted: bool) -> Device:
+        """Décision de la personne sur l'appareil : la clé en attente est retirée dans les deux cas. L'agent garde seul la clé acceptée."""
+        device = self.device(device_id)
+        device.controller_pending = None
+        self.store.save(device)
+        self.audit.record("CONTROLLER_KEY_ACCEPTED" if accepted else "CONTROLLER_KEY_REFUSED", device_id=device_id)
+        return device
+
     def set_platform(self, device_id: str, platform: str) -> Device:
         """Type de machine annoncé par l'agent authentifié (« windows », « windows-laptop », « windows-mini »...) : sert à l'affichage (bureau, portable,
         mini PC). Une valeur qui n'a pas la forme attendue est ignorée, jamais enregistrée."""

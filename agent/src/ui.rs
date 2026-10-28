@@ -46,6 +46,8 @@ pub enum UiCommand {
     Configure { server: String, api_key: String },
     /// Demande un NOUVEAU code d'appairage, même si l'appareil est déjà appairé (autre contrôleur, appareil retiré de la liste...).
     NewPairingCode,
+    /// Décision sur le contrôleur qui attend d'être reconnu (phase 3b de docs/SIGNATURE_CONTROLEUR.md).
+    ControllerDecision { accept: bool },
     Quit,
 }
 
@@ -77,6 +79,8 @@ pub struct UiState {
     pub link_detail: String,
     pub pairing_code: Option<String>,
     pub pairing_expires_ms: Option<u64>,
+    /// Empreinte du contrôleur en attente de reconnaissance (phase 3b) ; None s'il n'y en a pas.
+    pub controller_fingerprint: Option<String>,
     pub allow_mouse: bool,
     pub allow_keyboard: bool,
     pub consent: Option<ConsentInfo>,
@@ -243,6 +247,15 @@ struct ConsentBody {
 }
 
 #[derive(Deserialize)]
+struct ControllerBody {
+    accept: bool,
+}
+
+async fn controller(State(ui): State<Ui>, Json(body): Json<ControllerBody>) -> StatusCode {
+    ack(ui.send(UiCommand::ControllerDecision { accept: body.accept }))
+}
+
+#[derive(Deserialize)]
 struct AllowBody {
     mouse: bool,
     keyboard: bool,
@@ -293,6 +306,7 @@ pub fn router(ui: Ui) -> Router {
         .route("/api/allow", post(allow))
         .route("/api/setup", post(setup))
         .route("/api/pairing-code", post(new_pairing_code))
+        .route("/api/controller", post(controller))
         .route("/api/quit", post(quit))
         .layer(middleware::from_fn_with_state(ui.clone(), guard))
         .with_state(ui)
@@ -516,6 +530,17 @@ mod tests {
         assert_eq!(rx.try_recv().unwrap(), UiCommand::NewPairingCode);
         assert_eq!(rx.try_recv().unwrap(), UiCommand::Quit);
         assert_eq!(app.oneshot(post("/api/consent", "pas du json")).await.unwrap().status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn the_controller_decision_reaches_the_agent() {
+        let (ui, mut rx, app) = setup();
+        let token = ui.token.clone();
+        let ok = app.clone().oneshot(request("POST", "/api/controller", "127.0.0.1:4242", Some(&token), r#"{"accept":true}"#)).await.unwrap();
+        assert_eq!(ok.status(), StatusCode::NO_CONTENT);
+        assert_eq!(rx.try_recv().unwrap(), UiCommand::ControllerDecision { accept: true });
+        let refused = app.oneshot(request("POST", "/api/controller", "127.0.0.1:4242", None, r#"{"accept":false}"#)).await.unwrap();
+        assert_eq!(refused.status(), StatusCode::UNAUTHORIZED, "sans session, aucune décision ne passe");
     }
 
     #[test]
