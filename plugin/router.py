@@ -34,6 +34,7 @@ class RegisterBody(BaseModel):
 
 class PairBody(BaseModel):
     code: str = Field(pattern=r"^\d{6}$")
+    controller_key: str | None = Field(default=None, min_length=43, max_length=44)   # clé publique du contrôleur (phase 3, en attente)
 
 
 class SessionBody(BaseModel):
@@ -48,6 +49,10 @@ class SdpBody(BaseModel):
 
 class AnswerBody(SdpBody):
     signature: str = Field(pattern=SIGNATURE_PATTERN)            # signature de identity.answer_message, faite par l'agent
+
+
+class OfferBody(SdpBody):
+    signature: str | None = Field(default=None, pattern=SIGNATURE_PATTERN)           # signature du contrôleur sur son offre (facultative)
 
 
 class IceBody(BaseModel):
@@ -78,7 +83,7 @@ async def register_device(body: RegisterBody) -> dict:
 
 @pairing_router.post("/pair")
 async def pair(body: PairBody) -> dict:
-    return {"device": service.pair(body.code).to_dict()}
+    return {"device": service.pair(body.code, body.controller_key).to_dict()}
 
 
 @router.get("/devices")
@@ -122,8 +127,8 @@ async def signaling(session_id: str, after: int = Query(default=0, ge=0, le=1000
 
 
 @router.post("/signaling/offer")
-async def offer(body: SdpBody) -> dict:
-    return (await service.submit_offer(body.session_id, body.sdp)).to_dict()
+async def offer(body: OfferBody) -> dict:
+    return (await service.submit_offer(body.session_id, body.sdp, body.signature)).to_dict()
 
 
 @router.post("/signaling/answer")

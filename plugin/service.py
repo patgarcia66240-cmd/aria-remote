@@ -87,7 +87,9 @@ class RemoteService:
         self.audit.record("PAIRING_REQUESTED", device_id=device_id)
         return device, self.pairing.issue(device_id)
 
-    def pair(self, code: str) -> Device:
+    def pair(self, code: str, controller_key: str | None = None) -> Device:
+        if controller_key is not None:
+            identity.parse_public_key(controller_key)          # clé invalide = refus, avant toute autre action
         try:
             device_id = self.pairing.redeem(code)
         except Exception:
@@ -97,8 +99,11 @@ class RemoteService:
         if device is None:
             raise NotFound("Appareil inconnu.")
         device.paired = True
+        if controller_key is not None:
+            # En attente seulement : l'agent ne l'acceptera qu'après confirmation sur l'appareil (phase 3b).
+            device.controller_pending = controller_key
         self.store.save(device)
-        self.audit.record("PAIRING_ACCEPTED", device_id=device_id)
+        self.audit.record("PAIRING_ACCEPTED", device_id=device_id, result="controller_key_pending" if controller_key else "ok")
         return device
 
     def set_platform(self, device_id: str, platform: str) -> Device:
@@ -267,10 +272,10 @@ class RemoteService:
         hub.forget_session(session_id)
 
     # -- signaling : on relaie des textes, jamais de flux --------------------------------------------------------------------
-    async def submit_offer(self, session_id: str, sdp: str) -> Session:
+    async def submit_offer(self, session_id: str, sdp: str, signature: str | None = None) -> Session:
         session = self._signaling_session(session_id, {SessionState.CONNECTING, SessionState.RECONNECTING})
         offer = self._sdp(sdp)
-        await self.gateway.send_signal(session, "offer", offer)
+        await self.gateway.send_signal(session, "offer", offer, signature)
         session.offer, session.answer = offer, ""
         session.agent_ice.clear()
         return session

@@ -89,10 +89,12 @@ class AgentHub:
         if connection is not None:
             await connection.send({"type": "close_session", "session_id": session_id})
 
-    async def send_signal(self, session: Session, kind: str, value: str) -> None:
+    async def send_signal(self, session: Session, kind: str, value: str, signature: str | None = None) -> None:
         message: dict[str, Any] = {"type": kind, "session_id": session.session_id}
         if kind == "offer":
             message["sdp"] = value
+            if signature:
+                message["signature"] = signature      # signature du contrôleur, relayée telle quelle (le serveur ne la vérifie pas)
         elif kind == "ice":
             message["candidate"] = value
         await self._connection(session.device_id).send(message)

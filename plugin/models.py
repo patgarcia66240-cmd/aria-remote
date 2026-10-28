@@ -27,6 +27,8 @@ class Device:
     paired: bool = False
     granted: frozenset[Permission] = DEFAULT_GRANT
     registered_at: float = field(default_factory=time.time)
+    # Clé PUBLIQUE du contrôleur reçue à l'appairage, EN ATTENTE : elle n'est acceptée (et transmise à l'agent) qu'après confirmation sur l'appareil.
+    controller_pending: str | None = None
 
     def fingerprint(self) -> str:
         return hashlib.sha256(self.public_key.encode("utf-8")).hexdigest()[:16]

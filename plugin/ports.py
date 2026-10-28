@@ -21,7 +21,7 @@ class AgentGateway(Protocol):
 
     async def close_session(self, session_id: str) -> None: ...
 
-    async def send_signal(self, session: Session, kind: str, value: str) -> None:
+    async def send_signal(self, session: Session, kind: str, value: str, signature: str | None = None) -> None:
         """Transmet à l'agent un message de signaling du contrôleur : kind = « offer » (SDP), « ice » (candidat) ou « reconnect » (valeur vide)."""
 
 
