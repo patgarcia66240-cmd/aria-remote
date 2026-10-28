@@ -5,7 +5,10 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use remote_agent::identity::{controller_offer_message, fingerprint, Identity};
+use std::collections::HashMap;
+
+use base64::Engine;
+use remote_agent::identity::{answer_is_signed, controller_offer_message, fingerprint, Identity};
 use serde::Serialize;
 
 /// Évite deux clés créées en même temps si deux commandes arrivent ensemble.
@@ -51,6 +54,44 @@ pub fn sign_offer(path: &Path, session_id: &str, sdp: &str) -> Result<String, St
     Ok(identity.sign(&controller_offer_message(session_id, sdp)))
 }
 
+/// Clés publiques des appareils appairés, épinglées à l'appairage (point 2 de l'audit) : « appareil -> clé ».
+pub fn pins_path() -> PathBuf {
+    dirs::config_dir().unwrap_or_else(|| PathBuf::from(".")).join("aria-remote-desktop").join("pinned-devices.json")
+}
+
+fn read_pins(path: &Path) -> Result<HashMap<String, String>, String> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => serde_json::from_str(&text).map_err(|error| format!("registre des appareils illisible : {error}")),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(HashMap::new()),
+        // Une erreur de lecture ne doit jamais effacer les clés épinglées : on refuse plutôt que de réécrire un registre vide.
+        Err(error) => Err(format!("lecture du registre des appareils : {error}")),
+    }
+}
+
+/// Épingle la clé publique d'un appareil (32 octets en base64) et renvoie son empreinte à comparer avec la fenêtre de l'agent.
+pub fn pin_at(path: &Path, device_id: &str, public_key: &str) -> Result<String, String> {
+    let raw = base64::engine::general_purpose::STANDARD.decode(public_key.trim()).map_err(|_| "clé de l'appareil illisible".to_string())?;
+    if raw.len() != 32 {
+        return Err("clé de l'appareil invalide (32 octets attendus)".to_string());
+    }
+    let mut pins = read_pins(path)?;
+    pins.insert(device_id.to_string(), public_key.trim().to_string());
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|error| error.to_string())?;
+    }
+    std::fs::write(path, serde_json::to_string_pretty(&pins).map_err(|error| error.to_string())?)
+        .map_err(|error| format!("écriture du registre des appareils : {error}"))?;
+    fingerprint(public_key.trim()).map_err(|error| error.to_string())
+}
+
+/// Vraie seulement si la réponse est signée par la clé ÉPINGLÉE de cet appareil. Pas de clé épinglée = refus.
+pub fn verify_answer_at(path: &Path, device_id: &str, session_id: &str, offer: &str, answer: &str, signature: &str) -> Result<bool, String> {
+    match read_pins(path)?.get(device_id) {
+        Some(key) => Ok(answer_is_signed(key, session_id, offer, answer, signature)),
+        None => Ok(false),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -80,5 +121,39 @@ mod tests {
         assert!(controller_offer_is_signed(&info.public_key, "sess_9", sdp, &signature));
         assert!(!controller_offer_is_signed(&info.public_key, "sess_9", "v=0 autre", &signature), "offre modifiée");
         assert!(!controller_offer_is_signed(&info.public_key, "sess_10", sdp, &signature), "rejouée sur une autre session");
+    }
+
+    #[test]
+    fn an_answer_is_accepted_only_from_the_device_pinned_at_pairing() {
+        let dir = std::env::temp_dir().join(format!("aria-remote-pins-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("pinned-devices.json");
+        let device = Identity::generate();
+        let intruder = Identity::generate();
+        let (offer, answer) = ("v=0 offre", "v=0 reponse");
+        let signature = device.sign(&remote_agent::identity::answer_message("sess_1", offer, answer)).to_string();
+
+        assert_eq!(verify_answer_at(&path, "dev_1", "sess_1", offer, answer, &signature), Ok(false), "rien d'épinglé : refus");
+        let shown = pin_at(&path, "dev_1", &device.public_key()).unwrap();
+        assert_eq!(shown, fingerprint(&device.public_key()).unwrap(), "l'empreinte épinglée est celle de l'agent");
+        assert_eq!(verify_answer_at(&path, "dev_1", "sess_1", offer, answer, &signature), Ok(true));
+        assert_eq!(verify_answer_at(&path, "dev_1", "sess_1", offer, "v=0 modifiee", &signature), Ok(false), "réponse modifiée");
+        assert_eq!(verify_answer_at(&path, "dev_2", "sess_1", offer, answer, &signature), Ok(false), "autre appareil");
+
+        pin_at(&path, "dev_1", &intruder.public_key()).unwrap();
+        assert_eq!(verify_answer_at(&path, "dev_1", "sess_1", offer, answer, &signature), Ok(false), "un nouvel appairage remplace la clé");
+    }
+
+    #[test]
+    fn a_key_of_the_wrong_size_is_refused_and_an_unreadable_registry_is_never_overwritten() {
+        let dir = std::env::temp_dir().join(format!("aria-remote-pins-bad-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("pinned-devices.json");
+        assert!(pin_at(&path, "dev_1", "AAAA").is_err(), "trop court");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(&path, "{ pas du json").unwrap();
+        assert!(verify_answer_at(&path, "dev_1", "s", "o", "a", "x").is_err(), "registre illisible : erreur");
+        assert!(pin_at(&path, "dev_1", &Identity::generate().public_key()).is_err(), "le registre illisible n'est pas écrasé");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{ pas du json");
     }
 }

@@ -43,6 +43,18 @@ fn controller_sign_offer(session_id: String, sdp: String) -> Result<String, Stri
     controller_key::sign_offer(&controller_key::path(), &session_id, &sdp)
 }
 
+/// Épingle la clé de l'appareil reçue à l'appairage ; renvoie son empreinte, à comparer avec la fenêtre de l'agent.
+#[tauri::command]
+fn pin_device(device_id: String, public_key: String) -> Result<String, String> {
+    controller_key::pin_at(&controller_key::pins_path(), &device_id, &public_key)
+}
+
+/// Vérifie la réponse de l'agent avec la clé épinglée de cet appareil (point 2). Sans clé épinglée : refus.
+#[tauri::command]
+fn verify_answer(device_id: String, session_id: String, offer: String, answer: String, signature: String) -> Result<bool, String> {
+    controller_key::verify_answer_at(&controller_key::pins_path(), &device_id, &session_id, &offer, &answer, &signature)
+}
+
 #[tauri::command]
 fn app_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
@@ -211,7 +223,7 @@ pub fn run() {
         .manage(host::Host::default())
         .invoke_handler(tauri::generate_handler![
             app_version, load_settings, save_settings, set_mode, set_autostart, api_request, clipboard_read, clipboard_write, save_capture,
-            controller_identity, controller_sign_offer,
+            controller_identity, controller_sign_offer, pin_device, verify_answer,
             host::agent_start, host::agent_stop, host::agent_state, host::agent_command
         ])
         .setup(|app| {

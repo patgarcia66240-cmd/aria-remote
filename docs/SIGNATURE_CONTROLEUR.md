@@ -48,3 +48,14 @@ Le mode « journalisation seule » de la phase 2 permet de déployer l'agent ava
 - signature d'une autre clé : refusée ;
 - offre rejouée sur une autre session : refusée ;
 - clé publique non acceptée à l'appairage : refusée.
+
+## Réponse de l'agent (point 2 de l'audit)
+- L'agent signe sa réponse : `pc-assistant-remote-v1|answer|<session_id>|<sha256(offre)>|<sha256(réponse)>`, avec la clé de l'appareil.
+- Le serveur vérifie la signature (clé de l'appareil enregistrée) et la renvoie au contrôleur avec la réponse (`answer_signature`).
+- **Épinglage à l'appairage** (choix retenu) : seule la réponse d'appairage donne la clé publique de l'appareil. Le contrôleur la garde ;
+  la personne compare l'empreinte affichée par le contrôleur à celle de la fenêtre de l'agent (même calcul des deux côtés).
+- Le contrôleur ne connecte que si la réponse est signée par la clé épinglée de cet appareil. Pas de clé épinglée : refus.
+- Conséquence : un serveur compromis ne peut ni changer la clé d'un appareil, ni signer ou modifier une réponse.
+- Limite : sans l'étape de comparaison d'empreinte à l'appairage, la confiance revient au serveur à ce moment-là.
+- Implémentation : serveur (`answer_signature`, clé donnée à `/pair`), agent (`identity::answer_is_signed`), bureau (`pin_device`, `verify_answer`,
+  registre `pinned-devices.json`), onglet ARIA (`pinDevice`, `verifyAnswer` dans `ui/src/controllerKey.js`).

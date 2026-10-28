@@ -9,7 +9,7 @@ import { apiErrorMessage } from '../apiRuntime'
 //   « pointer » : déplacements de souris, non fiable (la position suivante remplace toujours la précédente).
 // Même logique que l'application de bureau (desktop/web/session.js).
 const BASE = '/api/remote'
-import { signOffer } from './controllerKey'
+import { signOffer, verifyAnswer } from './controllerKey'
 
 export const POLL_MS = 150          // sondage de la signalisation pendant la négociation (400 ms avant : jusqu'à 0,4 s perdue pour rien à l'ouverture)
 // Canal d'images : non ordonné, à fiabilité partielle. Un paquet perdu est retransmis pendant ce délai (assez pour 2 allers-retours à 150 ms) puis
@@ -116,7 +116,7 @@ export class FrameAssembler {
  */
 export async function openSession({
   deviceId, permissions, onState = () => {}, onFrame = () => {}, onInfo = () => {}, onCursor = () => {},
-  makePeer = (config) => new RTCPeerConnection(config), request = { api, post, sign: signOffer }, sleep = sleepMs, timeoutMs = CONNECT_TIMEOUT_MS,
+  makePeer = (config) => new RTCPeerConnection(config), request = { api, post, sign: signOffer, verifyAnswer }, sleep = sleepMs, timeoutMs = CONNECT_TIMEOUT_MS,
 }) {
   onState('asking')
   const session = await request.post('/sessions', { device_id: deviceId, permissions })
@@ -185,6 +185,9 @@ export async function openSession({
       next = view.next
       pending.push(...view.ice)
       if (view.answer && !answered) {
+        // Point 2 : la réponse doit être signée par la clé ÉPINGLÉE de cet appareil, sur cette offre.
+        const genuine = await request.verifyAnswer(deviceId, sessionId, sdp, view.answer, view.answer_signature || '').catch(() => false)
+        if (!genuine) throw new Error('La réponse de l\'appareil n\'est pas signée par sa clé enregistrée : connexion refusée.')
         await peer.setRemoteDescription({ type: 'answer', sdp: view.answer })
         answered = true
       }
