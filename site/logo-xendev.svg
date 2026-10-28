@@ -2,12 +2,16 @@
   <defs>
     <linearGradient id="xd-a" x1="10" y1="14" x2="34" y2="50" gradientUnits="userSpaceOnUse"><stop stop-color="#8A8EE6"/><stop offset="1" stop-color="#6469C8"/></linearGradient>
     <linearGradient id="xd-b" x1="34" y1="14" x2="10" y2="50" gradientUnits="userSpaceOnUse"><stop stop-color="#5CB3D6"/><stop offset="1" stop-color="#86A0E6"/></linearGradient>
-    <linearGradient id="xd-d" x1="40" y1="14" x2="58" y2="50" gradientUnits="userSpaceOnUse"><stop stop-color="#5CB3D6"/><stop offset="1" stop-color="#86A0E6"/></linearGradient>
+    <linearGradient id="xd-s" x1="42" y1="14" x2="42" y2="50" gradientUnits="userSpaceOnUse"><stop stop-color="#8A8EE6"/><stop offset="1" stop-color="#6469C8"/></linearGradient>
+    <linearGradient id="xd-d" x1="48" y1="14" x2="58" y2="50" gradientUnits="userSpaceOnUse"><stop stop-color="#5CB3D6"/><stop offset="1" stop-color="#86A0E6"/></linearGradient>
   </defs>
   <rect width="64" height="64" rx="14" fill="#0C131C"/>
-  <!-- X : deux lames qui se croisent (la bleue passe devant la violette) -->
-  <path d="M8.500 15.500 15.500 15.500 35.500 48.500 28 48.500Z" fill="url(#xd-a)" stroke="url(#xd-a)" stroke-width="2" stroke-linejoin="round"/>
-  <path d="M28.500 15.500 35.500 15.500 15.500 48.500 8.500 48.500Z" fill="url(#xd-b)" stroke="#0C131C" stroke-width="1.600" stroke-linejoin="round"/>
-  <!-- D : demi-disque plein, creusé -->
-  <path fill-rule="evenodd" fill="url(#xd-d)" d="M40.500 15.500H45C53 15.500 56.500 22.500 56.500 32S53 48.500 45 48.500H40.500ZM46.500 22.500H45.500C49 22.500 50.200 27 50.200 32S49 41.500 45.500 41.500H46.500Z"/>
+  <g transform="translate(-1.500 0)">
+    <!-- X : deux lames qui se croisent (la bleue passe devant la violette) -->
+    <path d="M8.500 15.500 15.500 15.500 35.500 48.500 28 48.500Z" fill="url(#xd-a)" stroke="url(#xd-a)" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M28.500 15.500 35.500 15.500 15.500 48.500 8.500 48.500Z" fill="url(#xd-b)" stroke="#0C131C" stroke-width="1.600" stroke-linejoin="round"/>
+    <!-- D : une haste (lame violette) et une panse (courbe bleue), séparées par un liseré comme le A d'ARIA -->
+    <path d="M40.500 15.500 46 15.500 46 48.500 40.500 48.500Z" fill="url(#xd-s)" stroke="url(#xd-s)" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M48.600 15.500C56.500 15.500 59.800 22.600 59.800 32S56.500 48.500 48.600 48.500L48.600 42C52 42 53.200 37.500 53.200 32S52 22 48.600 22Z" fill="url(#xd-d)" stroke="url(#xd-d)" stroke-width="1.600" stroke-linejoin="round"/>
+  </g>
 </svg>
