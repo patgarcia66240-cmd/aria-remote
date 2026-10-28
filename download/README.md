@@ -1,4 +1,4 @@
-# Page de téléchargement (processxen.com)
+# Page de téléchargement (xendev.eu/remote)
 
 Une page nginx qui propose la dernière version de l'**agent** et de l'**application de bureau**, avec toutes les anciennes versions et leur empreinte SHA-256.
 
