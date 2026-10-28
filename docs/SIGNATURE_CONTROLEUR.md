@@ -36,7 +36,7 @@ Aucune offre n'est acceptée par l'agent sans signature valide d'une clé de con
 2. **Phase 2** : agent Rust — stockage de la clé publique acceptée, empreinte affichée, vérification des offres en mode « journalisation seule » (ne refuse pas encore).
 3. **Phase 3** : serveur et plugin — relais de la clé publique et de la signature, tests d'appairage étendu.
 4. **Phase 4 (faite)** : bureau — `desktop/src/controller_key.rs` génère la clé au premier usage (fichier `controller.seed` dans le dossier de configuration, lecture refusée si erreur autre que « absent » pour ne jamais écraser une clé), commandes `controller_identity` et `controller_sign_offer`, offres signées dans `session.js` (sans signature si la signature échoue, en attendant la phase 6), clé publique envoyée à `/pair` et empreinte affichée dans le formulaire d'appairage. Tests : `npm test` (51 verts) ; tests Rust (`cargo test`) à lancer par la CI Windows.
-5. **Phase 5** : onglet ARIA — clé non extractible, signature des offres.
+5. **Phase 5 (faite)** : onglet ARIA — `ui/src/controllerKey.js` crée une clé Ed25519 WebCrypto non extractible, rangée dans IndexedDB ; l'appairage envoie la clé publique et affiche l'empreinte ; les offres sont signées. Sans WebCrypto Ed25519 (navigateur ancien), l'appairage est refusé avec un message explicite. Vérifiée par `signature.js`-équivalent sous Node (scratchpad) ; les tests Vitest de `ui/` ne tournent pas dans ce dépôt (chemins d'import obsolètes, pas de `package.json`).
 6. **Phase 6** : passage en mode strict (refus des offres non signées) une fois les contrôleurs à jour.
 
 ## Compatibilité

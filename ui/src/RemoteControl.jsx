@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, openSession, post } from './remoteApi'
+import { controllerIdentity } from './controllerKey'
 import { MachineArt, guessKind } from './remoteMachines'
 import RemoteScreen from './RemoteScreen'
 
@@ -79,6 +80,8 @@ export default function RemoteControl({ isActive = true }) {
   const [devices, setDevices] = useState([])
   const [error, setError] = useState('')
   const [code, setCode] = useState('')
+  const [fingerprint, setFingerprint] = useState('')
+  useEffect(() => { controllerIdentity().then((info) => setFingerprint(info.fingerprint)).catch(() => {}) }, [])
   const [busy, setBusy] = useState(false)
   const [connectingId, setConnectingId] = useState('')
   const [live, setLive] = useState(null)       // { link, device, permissions }
@@ -110,7 +113,9 @@ export default function RemoteControl({ isActive = true }) {
     event.preventDefault()
     setBusy(true)
     try {
-      await post('/pair', { code })
+      // La clé publique de ce contrôleur est remise à l'appairage : sans elle, l'agent ne pourra pas vérifier les sessions de ce navigateur.
+      const controller = await controllerIdentity()
+      await post('/pair', { code, controller_key: controller.publicKey })
       setCode('')
       await load()
     } catch (e) {
@@ -184,6 +189,7 @@ export default function RemoteControl({ isActive = true }) {
             <div className="min-w-0">
               <label htmlFor="remote-code" className="text-sm font-semibold text-gray-200">Code d'appairage</label>
               <p className="text-xs text-gray-400">Affiché par l'agent sur l'appareil à contrôler · valable 30 min · usage unique</p>
+              {fingerprint && <p className="mt-1 font-mono text-xs text-gray-500" title="À comparer avec l'empreinte affichée par l'agent">Empreinte de ce contrôleur : {fingerprint}</p>}
             </div>
             <div className="flex gap-2">
               <input id="remote-code" inputMode="numeric" autoComplete="off" value={code} placeholder="483921"
