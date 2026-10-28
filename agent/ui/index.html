@@ -117,6 +117,9 @@
   .perms-card { font-size: 15px; color: var(--text); }
   .perms-card summary { font-size: 11.5px; font-weight: 600; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
   .perms-card[open] summary { margin-bottom: 6px; }
+  .about p { color: var(--muted); font-size: 13.5px; margin: 6px 0; }
+  .about p b { color: var(--text); }
+  .about a { color: var(--accent-2); }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -173,6 +176,11 @@
     <div class="actions"><button class="ghost" id="change-server">Changer l'adresse</button></div>
   </section>
 
+  <details class="card about" style="padding:8px 14px"><summary>À quoi sert l'application de bureau ?</summary>
+    <p>L'application <b>ARIA Remote</b> (bureau) est le <b>contrôleur</b> : c'est elle qui se connecte à ce PC pour voir son écran et le piloter.</p>
+    <p>Le code d'appairage ci-dessus se saisit dans cette application, ou dans ARIA sous Ordinateur › Maintenance à distance. Une fois appairé, ce PC apparaît dans la liste du contrôleur.</p>
+    <p>Code source et documentation : <a href="https://github.com/patgarcia66240-cmd/aria-remote" target="_blank" rel="noopener">github.com/patgarcia66240-cmd/aria-remote</a></p>
+  </details>
   <details class="card" style="padding:8px 18px"><summary>Journal</summary><ul id="events"></ul></details>
 </main>
 
