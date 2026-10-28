@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>xendev — des outils qui restent chez toi</title>
+<meta name="description" content="xendev conçoit des logiciels locaux, sobres et sûrs : ARIA, un assistant personnel qui tourne sur ton PC, et ARIA Remote, le contrôle de PC à distance où rien n'est jamais caché.">
+<meta name="theme-color" content="#0b0f1d">
+<link rel="canonical" href="https://xendev.eu/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="xendev — des outils qui restent chez toi">
+<meta property="og:description" content="ARIA, assistant personnel local, et ARIA Remote, contrôle de PC à distance sécurisé.">
+<meta property="og:url" content="https://xendev.eu/">
+<meta property="og:image" content="https://xendev.eu/img/aria-remote.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='a' x1='30' y1='5' x2='14' y2='71' gradientUnits='userSpaceOnUse'%3E%3Cstop stop-color='%238A8EE6'/%3E%3Cstop offset='1' stop-color='%236469C8'/%3E%3C/linearGradient%3E%3ClinearGradient id='b' x1='48' y1='31' x2='62' y2='71' gradientUnits='userSpaceOnUse'%3E%3Cstop stop-color='%235CB3D6'/%3E%3Cstop offset='1' stop-color='%2386A0E6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='%230C131C'/%3E%3Cg transform='translate(32 32) scale(.74) translate(-38 -38.5)'%3E%3Cpath d='M34.5 8Q38 4 42 8Q48 14 48.5 24L23.5 71H6.5Z' fill='url(%23a)'/%3E%3Cpath d='M52 31.5Q54 31 55 33.5L69.5 69Q69.8 71 67.5 71H57Q55 71 54 70L37 58.5Q36 57.5 36.8 56.5L50 33Q50.8 31.7 52 31.5Z' fill='url(%23b)'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0b0f1d;
+    --bg-2: #11172b;
+    --bg-3: #172039;
+    --line: #26304e;
+    --text: #eaeef8;
+    --muted: #a6b0c9;
+    --violet: #8a8ee6;
+    --blue: #5cb3d6;
+    --accent: #5a5fd8;
+    --accent-hi: #6e73ea;
+    --ok: #4ade9b;
+    --radius: 18px;
+    --font: ui-sans-serif, "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.6 var(--font); -webkit-font-smoothing: antialiased; }
+  a { color: inherit; }
+  img, svg { display: block; max-width: 100%; }
+  .wrap { width: min(1160px, 100% - 48px); margin-inline: auto; }
+  .skip { position: absolute; left: 12px; top: -60px; z-index: 10; padding: 10px 16px; border-radius: 10px; background: var(--text); color: var(--bg); font-weight: 600; }
+  .skip:focus { top: 12px; }
+  :focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; border-radius: 6px; }
+
+  /* En-tête */
+  .top { position: sticky; top: 0; z-index: 5; background: rgba(11,15,29,.88); border-bottom: 1px solid var(--line); }
+  .top .wrap { display: flex; align-items: center; gap: 28px; min-height: 68px; }
+  .brand { display: inline-flex; align-items: center; gap: 12px; text-decoration: none; font-weight: 700; font-size: 21px; letter-spacing: -.01em; }
+  .brand svg { width: 34px; height: 34px; }
+  .top nav { margin-left: auto; display: flex; gap: 6px; }
+  .top nav a { padding: 10px 14px; border-radius: 10px; text-decoration: none; color: var(--muted); font-size: 15.5px; font-weight: 500; transition: color .15s, background .15s; }
+  .top nav a:hover { color: var(--text); background: var(--bg-3); }
+
+  /* Accueil */
+  .hero { padding: clamp(56px, 9vw, 120px) 0 clamp(48px, 7vw, 96px); background:
+      radial-gradient(900px 480px at 82% 8%, rgba(110,115,234,.22), transparent 70%),
+      radial-gradient(700px 420px at 8% 90%, rgba(92,179,214,.12), transparent 70%); }
+  .hero .wrap { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: clamp(32px, 5vw, 72px); align-items: center; }
+  h1 { margin: 0; font-size: clamp(2.6rem, 6.4vw, 4.9rem); line-height: 1.02; letter-spacing: -.035em; font-weight: 750; text-wrap: balance; }
+  h1 em { font-style: normal; color: var(--violet); }
+  .lead { margin: 26px 0 0; max-width: 34em; font-size: clamp(1.1rem, 1.6vw, 1.28rem); color: var(--muted); text-wrap: pretty; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 34px; }
+  .btn { display: inline-flex; align-items: center; gap: 10px; min-height: 50px; padding: 0 24px; border-radius: 14px; font-weight: 650; font-size: 16.5px; text-decoration: none; border: 1px solid transparent; transition: background .15s, border-color .15s, transform .15s; }
+  .btn svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  .btn.primary { background: var(--accent); color: #fff; }
+  .btn.primary:hover { background: var(--accent-hi); }
+  .btn.ghost { border-color: var(--line); color: var(--text); background: transparent; }
+  .btn.ghost:hover { background: var(--bg-3); border-color: #34416a; }
+
+  .art { position: relative; }
+  .art svg { width: 100%; height: auto; }
+  .link-line { stroke-dasharray: 7 9; animation: flow 1.6s linear infinite; }
+  @keyframes flow { to { stroke-dashoffset: -32; } }
+
+  /* Sections */
+  section { padding: clamp(56px, 8vw, 104px) 0; }
+  h2 { margin: 0; font-size: clamp(1.9rem, 4vw, 3rem); line-height: 1.08; letter-spacing: -.028em; font-weight: 720; text-wrap: balance; }
+  .sect-lead { margin: 16px 0 0; max-width: 38em; color: var(--muted); font-size: 1.12rem; text-wrap: pretty; }
+
+  /* Projets : deux grandes lignes, pas des cartes identiques */
+  .projects { background: var(--bg-2); border-block: 1px solid var(--line); }
+  .project { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: clamp(28px, 5vw, 72px); align-items: center; padding: clamp(36px, 5vw, 64px) 0; }
+  .project + .project { border-top: 1px solid var(--line); }
+  .project.flip .p-art { order: -1; }
+  .tag { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--bg-3); border: 1px solid var(--line); color: var(--muted); font-size: 14px; font-weight: 600; }
+  .tag i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .project h3 { margin: 16px 0 0; font-size: clamp(1.7rem, 3.2vw, 2.4rem); line-height: 1.1; letter-spacing: -.025em; font-weight: 720; }
+  .project p { margin: 14px 0 0; color: var(--muted); max-width: 36em; text-wrap: pretty; }
+  .facts { list-style: none; margin: 22px 0 0; padding: 0; display: grid; gap: 12px; }
+  .facts li { display: flex; gap: 12px; align-items: flex-start; color: var(--text); font-size: 16.5px; }
+  .facts svg { width: 20px; height: 20px; flex: none; margin-top: 3px; fill: none; stroke: var(--blue); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .p-art img { width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); }
+  .p-art { background: var(--bg); border: 1px solid var(--line); border-radius: 24px; padding: clamp(18px, 3vw, 32px); }
+  .project .cta { margin-top: 28px; }
+
+  /* Manière de faire */
+  .ways { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: clamp(28px, 5vw, 80px); }
+  .ways dl { margin: 0; }
+  .ways dt { font-size: clamp(1.25rem, 2.2vw, 1.55rem); font-weight: 700; letter-spacing: -.015em; }
+  .ways dd { margin: 6px 0 0; color: var(--muted); max-width: 34em; }
+  .ways div + div { margin-top: 30px; padding-top: 30px; border-top: 1px solid var(--line); }
+
+  /* À venir et pied de page */
+  .soon { text-align: center; border-top: 1px solid var(--line); }
+  .soon p { margin: 14px auto 0; max-width: 34em; color: var(--muted); }
+  .soon .cta { justify-content: center; }
+  footer { border-top: 1px solid var(--line); padding: 34px 0 44px; color: var(--muted); font-size: 15px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; }
+  footer a { text-decoration: none; }
+  footer a:hover { color: var(--text); text-decoration: underline; }
+  footer .spacer { flex: 1; }
+
+  @media (max-width: 860px) {
+    .hero .wrap, .project, .ways { grid-template-columns: 1fr; }
+    .project.flip .p-art { order: 0; }
+    .top nav a { padding: 10px 10px; }
+  }
+  @media (max-width: 520px) {
+    body { font-size: 16.5px; }
+    .top .wrap { gap: 10px; }
+    .top nav a { font-size: 15px; padding: 10px 8px; }
+    .btn { width: 100%; justify-content: center; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .link-line { animation: none; }
+    .btn, .top nav a { transition: none; }
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#contenu">Aller au contenu</a>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#" aria-label="xendev, accueil">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="la" x1="30" y1="5" x2="14" y2="71" gradientUnits="userSpaceOnUse"><stop stop-color="#8A8EE6"/><stop offset="1" stop-color="#6469C8"/></linearGradient><linearGradient id="lb" x1="48" y1="31" x2="62" y2="71" gradientUnits="userSpaceOnUse"><stop stop-color="#5CB3D6"/><stop offset="1" stop-color="#86A0E6"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="#0C131C"/><g transform="translate(32 32) scale(.74) translate(-38 -38.5)"><path d="M34.5 8Q38 4 42 8Q48 14 48.5 24L23.5 71H6.5Z" fill="url(#la)"/><path d="M52 31.5Q54 31 55 33.5L69.5 69Q69.8 71 67.5 71H57Q55 71 54 70L37 58.5Q36 57.5 36.8 56.5L50 33Q50.8 31.7 52 31.5Z" fill="url(#lb)"/></g></svg>
+      xendev
+    </a>
+    <nav aria-label="Navigation principale">
+      <a href="#projets">Projets</a>
+      <a href="#methode">Méthode</a>
+      <a href="#contact">Contact</a>
+    </nav>
+  </div>
+</header>
+
+<main id="contenu">
+  <section class="hero" aria-labelledby="titre">
+    <div class="wrap">
+      <div>
+        <h1 id="titre">Des outils qui <em>restent chez toi</em>.</h1>
+        <p class="lead">xendev conçoit des logiciels locaux, sobres et sûrs. Un assistant personnel qui tourne sur ton PC. Un contrôle à distance où rien n'est jamais caché : tu vois qui se connecte, et tu peux tout couper.</p>
+        <div class="cta">
+          <a class="btn primary" href="#projets"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12l7 7 7-7"/></svg>Voir les projets</a>
+          <a class="btn ghost" href="https://github.com/patgarcia66240-cmd" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.800-.3 5.500-1.400 5.500-6a4.600 4.600 0 0 0-1.300-3.200 4.200 4.200 0 0 0-.1-3.200s-1.100-.3-3.500 1.300a12.300 12.300 0 0 0-6.200 0C6.400 2.800 5.300 3.100 5.300 3.100a4.200 4.200 0 0 0-.1 3.200A4.600 4.600 0 0 0 3.900 9.500c0 4.600 2.700 5.700 5.500 6-.6.600-.6 1.200-.5 2V21"/></svg>GitHub</a>
+        </div>
+      </div>
+
+      <div class="art">
+        <svg viewBox="0 0 520 400" role="img" aria-label="Un portable contrôle à distance l'écran d'un PC de bureau, par une connexion chiffrée">
+          <defs>
+            <linearGradient id="on" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6e73ea"/><stop offset="1" stop-color="#5cb3d6"/></linearGradient>
+            <linearGradient id="la2" x1="30" y1="5" x2="14" y2="71" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#dfe3ff"/></linearGradient>
+          </defs>
+          <!-- Portable (le contrôleur) -->
+          <g transform="translate(18 196)">
+            <rect x="26" y="0" width="190" height="132" rx="12" fill="#10162a" stroke="#34416a" stroke-width="2"/>
+            <rect x="36" y="10" width="170" height="112" rx="6" fill="url(#on)"/>
+            <g transform="translate(121 66) scale(.82) translate(-38 -38.5)"><path d="M34.5 8Q38 4 42 8Q48 14 48.5 24L23.5 71H6.5Z" fill="#fff" fill-opacity=".95"/><path d="M52 31.5Q54 31 55 33.5L69.5 69Q69.8 71 67.5 71H57Q55 71 54 70L37 58.5Q36 57.5 36.8 56.5L50 33Q50.8 31.7 52 31.5Z" fill="#e0f2fe" fill-opacity=".95"/></g>
+            <path d="M0 140h242l-10 20q-2 4-7 4H17q-5 0-7-4z" fill="#1b2440" stroke="#34416a" stroke-width="2"/>
+            <rect x="96" y="140" width="50" height="7" rx="3.500" fill="#0b0f1d"/>
+          </g>
+          <!-- PC de bureau (l'appareil contrôlé) -->
+          <g transform="translate(300 56)">
+            <rect x="0" y="0" width="190" height="130" rx="12" fill="#10162a" stroke="#34416a" stroke-width="2"/>
+            <rect x="10" y="10" width="170" height="110" rx="6" fill="#0d1426"/>
+            <rect x="22" y="24" width="86" height="8" rx="4" fill="#26304e"/><rect x="22" y="42" width="140" height="8" rx="4" fill="#26304e"/><rect x="22" y="60" width="112" height="8" rx="4" fill="#26304e"/>
+            <rect x="22" y="84" width="54" height="22" rx="7" fill="#5a5fd8"/>
+            <path d="M120 78l6 26 5-9 9 6-4-9 10-1z" fill="#fff" stroke="#0b0f1d" stroke-width="1.500" stroke-linejoin="round"/>
+            <rect x="78" y="130" width="34" height="22" fill="#1b2440" stroke="#34416a" stroke-width="2"/>
+            <rect x="50" y="150" width="90" height="10" rx="5" fill="#1b2440" stroke="#34416a" stroke-width="2"/>
+          </g>
+          <!-- Liaison chiffrée -->
+          <path class="link-line" d="M222 222 C 270 222, 262 150, 304 128" fill="none" stroke="#8a8ee6" stroke-width="3" stroke-linecap="round"/>
+          <g transform="translate(228 168)">
+            <rect x="0" y="0" width="98" height="34" rx="17" fill="#11172b" stroke="#34416a" stroke-width="1.500"/>
+            <rect x="12" y="13" width="11" height="9" rx="2" fill="#4ade9b"/><path d="M14.500 13v-2.500a3.500 3.500 0 0 1 7 0V13" fill="none" stroke="#4ade9b" stroke-width="1.800"/>
+            <text x="30" y="22" fill="#eaeef8" font-size="13.500" font-weight="600" font-family="ui-sans-serif, 'Segoe UI', system-ui, sans-serif">chiffré</text>
+          </g>
+          <!-- Accord demandé -->
+          <g transform="translate(284 300)">
+            <rect x="0" y="0" width="210" height="64" rx="14" fill="#11172b" stroke="#34416a" stroke-width="1.500"/>
+            <text x="16" y="26" fill="#eaeef8" font-size="14.500" font-weight="650" font-family="ui-sans-serif, 'Segoe UI', system-ui, sans-serif">Autoriser la prise de contrôle ?</text>
+            <rect x="16" y="36" width="76" height="20" rx="7" fill="#5a5fd8"/><text x="54" y="50.500" text-anchor="middle" fill="#fff" font-size="12.500" font-weight="650" font-family="ui-sans-serif, 'Segoe UI', system-ui, sans-serif">Accepter</text>
+            <rect x="100" y="36" width="66" height="20" rx="7" fill="none" stroke="#34416a"/><text x="133" y="50.500" text-anchor="middle" fill="#a6b0c9" font-size="12.500" font-weight="600" font-family="ui-sans-serif, 'Segoe UI', system-ui, sans-serif">Refuser</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="projects" id="projets" aria-labelledby="t-projets">
+    <div class="wrap">
+      <h2 id="t-projets">Deux projets, une même idée</h2>
+      <p class="sect-lead">Des logiciels qui font un travail précis, sur ta machine, avec un contrôle toujours visible.</p>
+
+      <article class="project" aria-labelledby="p-aria">
+        <div>
+          <span class="tag"><i aria-hidden="true"></i>Assistant personnel local</span>
+          <h3 id="p-aria">ARIA</h3>
+          <p>Une conversation centrale qui comprend tes demandes en français, appelle les outils de ton PC et répond sous la bonne forme plutôt que par un mur de texte.</p>
+          <ul class="facts">
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.500 4.500 4.500L19 7.500"/></svg>Texte, tableaux, schémas, quiz, cartes mentales et fiches selon la demande</li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.500 4.500 4.500L19 7.500"/></svg>Des plugins activables : fichiers, système, agenda, rappels, messagerie, domotique</li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.500 4.500 4.500L19 7.500"/></svg>Les actions sensibles montrent ce qui va se passer et peuvent être refusées</li>
+          </ul>
+        </div>
+        <div class="p-art">
+          <svg viewBox="0 0 440 320" role="img" aria-label="Aperçu d'une conversation avec ARIA : une demande, puis une réponse sous forme de tableau">
+            <defs>
+              <radialGradient id="orb" cx=".35" cy=".3" r=".9"><stop offset="0" stop-color="#c9ccff"/><stop offset=".45" stop-color="#6e73ea"/><stop offset="1" stop-color="#2a2f7a"/></radialGradient>
+            </defs>
+            <circle cx="42" cy="44" r="22" fill="url(#orb)"/>
+            <rect x="80" y="22" width="300" height="44" rx="14" fill="#172039"/>
+            <text x="98" y="50" fill="#eaeef8" font-size="15" font-family="ui-sans-serif, 'Segoe UI', system-ui, sans-serif">Compare mes trois abonnements.</text>
+            <rect x="60" y="84" width="356" height="196" rx="16" fill="#11172b" stroke="#26304e"/>
+            <rect x="76" y="100" width="324" height="30" rx="8" fill="#1b2440"/>
+            <text x="90" y="120" fill="#a6b0c9" font-size="13" font-weight="650" font-family="ui-sans-serif, 'Segoe UI', system-ui, sans-serif">Service</text><text x="232" y="120" fill="#a6b0c9" font-size="13" font-weight="650" font-family="ui-sans-serif, 'Segoe UI', system-ui, sans-serif">Prix</text><text x="318" y="120" fill="#a6b0c9" font-size="13" font-weight="650" font-family="ui-sans-serif, 'Segoe UI', system-ui, sans-serif">Échéance</text>
+            <g font-size="14" fill="#eaeef8" font-family="ui-sans-serif, 'Segoe UI', system-ui, sans-serif">
+              <text x="90" y="156">Musique</text><text x="232" y="156">10,99 €</text><text x="318" y="156">12 nov.</text>
+              <text x="90" y="190">Cloud</text><text x="232" y="190">2,99 €</text><text x="318" y="190">3 déc.</text>
+              <text x="90" y="224">Vidéo</text><text x="232" y="224">13,49 €</text><text x="318" y="224">21 nov.</text>
+            </g>
+            <path d="M76 242h324" stroke="#26304e"/>
+            <text x="90" y="266" fill="#a6b0c9" font-size="13" font-family="ui-sans-serif, 'Segoe UI', system-ui, sans-serif">Exemple illustratif.</text>
+          </svg>
+        </div>
+      </article>
+
+      <article class="project flip" aria-labelledby="p-remote">
+        <div>
+          <span class="tag"><i aria-hidden="true"></i>Contrôle à distance sécurisé</span>
+          <h3 id="p-remote">ARIA Remote</h3>
+          <p>Contrôle un PC à distance, ou laisse quelqu'un contrôler le tien, avec une seule application. Un code à six chiffres relie les deux PC. Ensuite, l'écran, la souris et le clavier passent en direct, chiffrés.</p>
+          <ul class="facts">
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.500 4.500 4.500L19 7.500"/></svg>Le serveur ne voit pas passer l'écran : seule la mise en relation passe par lui</li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.500 4.500 4.500L19 7.500"/></svg>La personne devant le PC accepte chaque prise de contrôle et choisit souris et clavier</li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.500 4.500 4.500L19 7.500"/></svg>Application Windows, agent seul pour les PC sans écran, plugin pour ARIA</li>
+          </ul>
+          <div class="cta">
+            <a class="btn primary" href="https://xendev.eu/remote" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg>Télécharger</a>
+            <a class="btn ghost" href="https://github.com/patgarcia66240-cmd/aria-remote" rel="noopener">Code source</a>
+          </div>
+        </div>
+        <div class="p-art">
+          <img src="img/aria-remote.png" width="1680" height="849" loading="lazy" decoding="async" alt="L'application ARIA Remote : la liste des appareils (PC-Bureau et Portable-Salon disponibles, Mini-PC-Atelier hors ligne), les onglets Contrôler et Cet appareil, et le champ pour saisir un code d'appairage.">
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section id="methode" aria-labelledby="t-methode">
+    <div class="wrap ways">
+      <div>
+        <h2 id="t-methode">Ma façon de faire</h2>
+        <p class="sect-lead">Trois règles qui guident chaque outil.</p>
+      </div>
+      <dl>
+        <div><dt>Local d'abord</dt><dd>Les outils tournent sur ta machine. Ce qui passe par un serveur se limite à ce qui est nécessaire, et reste chiffré.</dd></div>
+        <div><dt>Le contrôle reste visible</dt><dd>Tout ce qui touche tes fichiers, tes messages ou ton écran dit ce qui va se passer, demande ton accord et peut être coupé à tout moment.</dd></div>
+        <div><dt>Simple à comprendre</dt><dd>Un code, un bouton, une réponse claire. Pas besoin d'être technicien pour s'y retrouver.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="soon" id="contact" aria-labelledby="t-contact">
+    <div class="wrap">
+      <h2 id="t-contact">D'autres projets arrivent</h2>
+      <p>Une idée, une question ou un retour sur ARIA ou ARIA Remote ? Écris-moi, je réponds dès que possible.</p>
+      <div class="cta">
+        <a class="btn primary" href="mailto:xenatronics@gmx.fr?subject=xendev.eu"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>xenatronics@gmx.fr</a>
+        <a class="btn ghost" href="https://github.com/patgarcia66240-cmd/aria-remote/issues" rel="noopener">Ouvrir un ticket sur GitHub</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© <span id="annee">2026</span> xendev</span>
+    <span class="spacer"></span>
+    <a href="mailto:xenatronics@gmx.fr">xenatronics@gmx.fr</a>
+    <a href="https://github.com/patgarcia66240-cmd" rel="noopener">GitHub</a>
+    <a href="#projets">Projets</a>
+    <span>Aucun cookie, aucun suivi.</span>
+  </div>
+</footer>
+<script>
+  // Année du pied de page (le texte « 2026 » reste affiché si le script est bloqué).
+  document.getElementById('annee').textContent = new Date().getFullYear()
+</script>
+</body>
+</html>
