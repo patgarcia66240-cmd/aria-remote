@@ -51,7 +51,7 @@
   .hint a { color:var(--b300); }
   .keepgrid { display:grid; grid-template-columns:1.05fr .95fr; gap:56px; align-items:center; }
   .keepgrid .keep { grid-template-columns:1fr; gap:28px; }
-  .perm { margin:0; } .perm svg { display:block; width:100%; height:auto; overflow:visible; }
+  .perm { margin:0; max-width:420px; } .perm svg { display:block; width:100%; height:auto; overflow:visible; }
   .final { text-align:center; margin:clamp(32px,6vh,64px) 0 clamp(40px,7vh,72px); padding:clamp(40px,7vh,72px) 24px; border-radius:28px; border:1px solid var(--g700);
     background:radial-gradient(70% 120% at 50% 0%, rgba(47,111,224,.26), transparent 70%), rgba(23,31,46,.6); }
   .final .meta { margin-top:18px; }
@@ -78,7 +78,7 @@
   /* 3. Ce que tu gardes en main */
   .keep { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
   .keep > div { display:flex; gap:16px; align-items:flex-start; }
-  .keep .ico { flex:none; width:48px; height:48px; border-radius:14px; display:grid; place-items:center; color:var(--b300); background:rgba(74,138,240,.14); border:1px solid rgba(122,174,255,.25); }
+  .keep .ico { flex:none; width:40px; height:40px; display:grid; place-items:center; color:var(--b300); background:none; border:0; }
   .keep h3 { margin:0 0 4px; font-size:18px; } .keep p { margin:0; color:var(--g400); font-size:15.5px; }
 
   /* 4. Aide : repliée par défaut */
