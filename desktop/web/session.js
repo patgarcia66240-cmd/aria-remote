@@ -23,7 +23,7 @@ const DISCONNECTED_GRACE_MS = 5000
 export function createRequest(invoke) {
   const api = (path, options = {}) => invoke('api_request', { method: options.method || 'GET', path, body: null })
   const post = (path, body) => invoke('api_request', { method: 'POST', path, body: body ?? {} })
-  return { api, post }
+  return { sign: (sessionId, sdp) => invoke('controller_sign_offer', { sessionId, sdp }), api, post }
 }
 
 const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -161,7 +161,10 @@ export async function openSession({
       else queued.push(event.candidate)
     }
     await peer.setLocalDescription(await peer.createOffer())
-    await request.post('/signaling/offer', { session_id: sessionId, sdp: peer.localDescription.sdp })
+    const sdp = peer.localDescription.sdp
+    // Offre signée par la clé de ce contrôleur (phase 4) : l'agent la vérifie avant de répondre. Sans clé disponible, elle part sans signature.
+    const signature = request.sign ? await request.sign(sessionId, sdp).catch(() => null) : null
+    await request.post('/signaling/offer', signature ? { session_id: sessionId, sdp, signature } : { session_id: sessionId, sdp })
     offerSent = true
     queued.splice(0).forEach(sendIce)
 

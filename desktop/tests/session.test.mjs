@@ -315,3 +315,28 @@ describe('openSession', () => {
     assert.equal(peers.length, 4)
   })
 })
+
+describe('signature des offres du contrôleur (phase 4)', () => {
+  it('createRequest.sign appelle controller_sign_offer avec la session et le SDP', async () => {
+    const invoke = mock.fn(async () => 'SIGNATURE')
+    const request = createRequest(invoke)
+    assert.equal(await request.sign('sess_1', 'v=0 offre'), 'SIGNATURE')
+    assert.deepEqual(invoke.mock.calls.map((c) => c.arguments), [['controller_sign_offer', { sessionId: 'sess_1', sdp: 'v=0 offre' }]])
+  })
+
+  it('l\'offre part avec sa signature quand le bureau sait signer', async () => {
+    const { request, log } = backend()
+    const signed = { ...request, sign: async (sessionId, sdp) => `sig:${sessionId}:${sdp.length}` }
+    await openSession({ ...base, request: signed, makePeer: () => fakePeer(log) })
+    const offer = log.find(([path]) => path === '/signaling/offer')
+    assert.deepEqual(offer[1], { session_id: 'sess_test', sdp: 'v=0 offer', signature: 'sig:sess_test:9' })
+  })
+
+  it('si la signature échoue, l\'offre part sans champ signature (l\'agent décidera, phase 6)', async () => {
+    const { request, log } = backend()
+    const failing = { ...request, sign: async () => { throw new Error('clé indisponible') } }
+    await openSession({ ...base, request: failing, makePeer: () => fakePeer(log) })
+    const offer = log.find(([path]) => path === '/signaling/offer')
+    assert.deepEqual(offer[1], { session_id: 'sess_test', sdp: 'v=0 offer' })
+  })
+})

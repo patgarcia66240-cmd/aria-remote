@@ -6,6 +6,7 @@
 mod autostart;
 mod client;
 mod config;
+mod controller_key;
 mod files;
 mod host;
 
@@ -30,6 +31,16 @@ impl From<Config> for Settings {
     fn from(config: Config) -> Self {
         Self { configured: config.configured(), server: config.server, mode: config.mode, autostart: config.autostart }
     }
+}
+
+#[tauri::command]
+fn controller_identity() -> Result<controller_key::ControllerIdentity, String> {
+    controller_key::identity_info(&controller_key::path())
+}
+
+#[tauri::command]
+fn controller_sign_offer(session_id: String, sdp: String) -> Result<String, String> {
+    controller_key::sign_offer(&controller_key::path(), &session_id, &sdp)
 }
 
 #[tauri::command]
@@ -200,6 +211,7 @@ pub fn run() {
         .manage(host::Host::default())
         .invoke_handler(tauri::generate_handler![
             app_version, load_settings, save_settings, set_mode, set_autostart, api_request, clipboard_read, clipboard_write, save_capture,
+            controller_identity, controller_sign_offer,
             host::agent_start, host::agent_stop, host::agent_state, host::agent_command
         ])
         .setup(|app| {

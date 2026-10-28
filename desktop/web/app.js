@@ -373,6 +373,12 @@ $('code').addEventListener('input', () => {
   $('pair-btn').disabled = digits.length !== 6
 })
 
+if (invoke) {
+  invoke('controller_identity').then((info) => {
+    $('pair-fp').textContent = `Empreinte de ce contrôleur : ${info.fingerprint}. Compare-la avec celle affichée sur le PC à contrôler, avant d'appairer.`
+  }).catch(() => {})
+}
+
 $('pair-form').addEventListener('submit', async (event) => {
   event.preventDefault()
   const code = pairingDigits($('code').value)
@@ -380,7 +386,9 @@ $('pair-form').addEventListener('submit', async (event) => {
   showError($('pair-err'), ''); show($('pair-ok'), false)
   $('pair-btn').disabled = true
   try {
-    const { device } = await request.post('/pair', { code })
+    // La clé publique de ce contrôleur est remise à l'appairage (phase 3a) : l'agent la fera confirmer sur son PC avant de la retenir.
+    const controller = invoke ? await invoke('controller_identity').catch(() => null) : null
+    const { device } = await request.post('/pair', controller ? { code, controller_key: controller.public_key } : { code })
     $('code').value = ''
     $('pair-ok').textContent = `${device?.name || 'Appareil'} est appairé.`; show($('pair-ok'), true)
     refresh()
