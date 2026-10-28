@@ -75,6 +75,11 @@ class RemoteService:
         if known and known.paired and known.public_key != public_key:
             self.audit.record("AUTHENTICATION_FAILED", device_id=device_id, result="refused", reason="public_key_mismatch")
             raise InvalidState("Cet appareil est déjà appairé avec une autre identité.")
+        # Appareil non appairé mais avec un code en cours : une autre clé ne peut pas remplacer la première tant que ce code est valide
+        # (sinon une clé d'agent divulguée détourne l'identité avant l'appairage, et invalide le code du vrai agent).
+        if known and not known.paired and known.public_key != public_key and self.pairing.pending(device_id):
+            self.audit.record("AUTHENTICATION_FAILED", device_id=device_id, result="refused", reason="pending_key_change")
+            raise InvalidState("Cet appareil attend déjà son appairage avec une autre clé : réessaie après expiration du code.")
         device = known or Device(device_id, name, public_key, platform)
         device.name = name
         device.public_key = public_key       # appareil pas encore appairé : il peut changer de clé, pas un appareil appairé (refusé plus haut)

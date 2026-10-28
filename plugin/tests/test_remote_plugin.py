@@ -216,9 +216,21 @@ def test_pairing_registers_the_device_and_a_paired_device_cannot_be_taken_over(r
     assert "key" not in json.dumps(run(remote.service.list_devices())) and run(remote.service.list_devices())[0]["online"] is True
 
 
-def test_an_unpaired_device_may_change_its_key_but_only_by_proving_the_new_one(remote):
+def test_an_unpaired_device_cannot_swap_its_key_while_a_code_is_pending(remote):
     first, second = Agent(), Agent()
     remote.service.register_device(**first.register_args())
+    with pytest.raises(InvalidState, match="attend déjà"):
+        remote.service.register_device(**second.register_args())      # un code valide existe : la clé ne change pas
+    assert remote.store.get(DEVICE).public_key == first.public_key
+    assert remote.audit.names()[-1] == "AUTHENTICATION_FAILED"
+
+
+def test_an_unpaired_device_may_change_its_key_once_its_code_has_expired(remote):
+    clock = [1000.0]
+    remote.service.pairing = PairingBook(clock=lambda: clock[0], ttl=60)
+    first, second = Agent(), Agent()
+    remote.service.register_device(**first.register_args())
+    clock[0] += 61                                                     # le code est expiré
     remote.service.register_device(**second.register_args())
     assert remote.store.get(DEVICE).public_key == second.public_key
 
