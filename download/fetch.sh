@@ -67,7 +67,7 @@ while [ "${i}" -lt "${count}" ]; do
     place "${cached}" remote-agent.exe
     echo "${ver}" > version.txt; echo "${sum}" > sha256.txt; echo "${size}" > size.txt
   fi
-  printf '<li class="ver"><span class="vn"><b>%s</b>%s</span><span class="vd">%s</span><span class="vs">%s</span><code class="vh" title="Empreinte SHA-256">%s</code><a class="vl" href="/remote/versions/%s/remote-agent.exe" download>Télécharger</a></li>\n' \
+  printf '<li class="ver"><span class="vn"><b>%s</b>%s</span><span class="vd">%s</span><span class="vs">%s</span><code class="vh" title="Empreinte SHA-256">%s</code><a class="vl" href="/remote/versions/%s/remote-agent.exe" download title="Télécharger" aria-label="Télécharger"><svg class="i"><use href="#i-download"/></svg></a></li>\n' \
     "${ver}" "${badge}" "${day}" "${size}" "${sum}" "${ver}" >> rows.html
   i=$((i + 1))
 done
