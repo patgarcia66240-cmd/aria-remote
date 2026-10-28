@@ -76,7 +76,17 @@ struct Registered {
 }
 
 /// Annonce l'appareil (demande SIGNÉE : preuve de possession de la clé privée, anti-rejeu par horodatage et nonce) et renvoie le code à saisir.
+/// Défense en profondeur : la clé d'API ne part jamais vers un serveur non sûr (http hors réseau local, ou schéma inconnu), même si l'appelant
+/// a oublié de normaliser l'adresse. Même règle que config::normalize_server.
+fn ensure_safe_server(server: &str) -> Result<()> {
+    match crate::config::normalize_server(server) {
+        Some(normalized) if normalized == server.trim().trim_end_matches('/') => Ok(()),
+        _ => bail!("adresse de serveur refusée (https, ou http sur le réseau local seulement)"),
+    }
+}
+
 pub async fn register(server: &str, api_key: &str, config: &Config, identity: &Identity, platform: &str) -> Result<(String, u64)> {
+    ensure_safe_server(server)?;
     let mut raw = [0u8; 18];
     rand::rngs::OsRng.fill_bytes(&mut raw);
     let nonce = base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, raw);
@@ -108,6 +118,7 @@ pub async fn register(server: &str, api_key: &str, config: &Config, identity: &I
 }
 
 pub async fn connect(server: &str, api_key: &str, device_id: &str) -> Result<Socket> {
+    ensure_safe_server(server)?;
     let mut request = websocket_url(server, device_id).into_client_request()?;
     request.headers_mut().insert("x-api-key", api_key.parse().context("clé d'API invalide")?);
     let attempt = match tokio::time::timeout(NETWORK_TIMEOUT, connect_async(request)).await {
@@ -175,5 +186,20 @@ mod tests {
         // le type de machine n'est envoyé que s'il est connu : un ancien serveur reçoit exactement le message d'avant
         assert!(serde_json::to_value(ClientMessage::Grant { permissions: vec![], platform: String::new() }).unwrap().get("platform").is_none());
         assert_eq!(serde_json::to_value(ClientMessage::Grant { permissions: vec![], platform: "windows-laptop".into() }).unwrap()["platform"], "windows-laptop");
+    }
+}
+
+#[cfg(test)]
+mod safety_tests {
+    use super::ensure_safe_server;
+
+    #[test]
+    fn the_api_key_only_travels_to_https_or_to_the_local_network_over_http() {
+        assert!(ensure_safe_server("https://rendezvous.exemple.fr").is_ok());
+        assert!(ensure_safe_server("http://192.168.1.20:8000").is_ok());
+        assert!(ensure_safe_server("http://127.0.0.1:8000").is_ok());
+        assert!(ensure_safe_server("http://attaquant.exemple").is_err(), "http vers Internet : la clé partirait en clair");
+        assert!(ensure_safe_server("ftp://192.168.1.20").is_err());
+        assert!(ensure_safe_server("").is_err());
     }
 }
