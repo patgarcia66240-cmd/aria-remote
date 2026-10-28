@@ -4,7 +4,9 @@
 #   remote-agent.exe, remote-agent.exe.sha256   : la plus récente (le bouton principal) ;
 #   version.txt, sha256.txt, size.txt           : ses valeurs, pour remplir la page ;
 #   rows.html                                   : la liste de toutes les versions ;
-#   desktop/aria-remote-desktop.exe(.sha256), desktop.html : la dernière version de l'application de bureau (étiquettes desktop-v*), si elle existe.
+#   desktop/versions/<x.y.z>/aria-remote-desktop.exe : chaque version de l'application de bureau (étiquettes desktop-v*) ;
+#   desktop/aria-remote-desktop.exe, desktop.html     : la plus récente (bouton principal), si elle existe ;
+#   desktop-rows.html                                 : la liste des versions de l'application de bureau.
 #
 # Les fichiers déjà téléchargés sont gardés dans $CACHE (une version publiée ne change jamais) : une mise à jour ne télécharge que les NOUVELLES versions
 # et ne fait qu'un seul appel à l'API GitHub (limite anonyme : 60 par heure). Chaque exe est vérifié par son empreinte SHA-256.
@@ -72,16 +74,31 @@ while [ "${i}" -lt "${count}" ]; do
   i=$((i + 1))
 done
 
-# -- Application de bureau (étiquettes desktop-v*) : facultative, seule la dernière version est proposée.
-mkdir -p desktop
-latest="$(echo "${releases}" | jq -c '[.[] | select(.tag_name | startswith("desktop-v"))][0] // empty')"
-if [ -n "${latest}" ]; then
-  dver="$(echo "${latest}" | jq -r '.tag_name | ltrimstr("desktop-v")')"
-  dcached="$(ensure desktop "${dver}" "${latest}" aria-remote-desktop.exe)"
-  place "${dcached}" desktop/aria-remote-desktop.exe
-  dsum="$(cut -d' ' -f1 "${dcached}.sha256")"; dsize="$(du -h "${dcached}" | cut -f1)"
-  printf '<a class="cta small" href="/remote/desktop/aria-remote-desktop.exe" download><svg class="i"><use href="#i-download"/></svg>Télécharger pour Windows</a>\n<p class="meta">Version %s · %s · aucune installation</p>\n<code class="hash" title="Empreinte SHA-256">%s</code>\n' "${dver}" "${dsize}" "${dsum}" > desktop.html
-  echo "Application de bureau ${dver}."
+# -- Application de bureau (étiquettes desktop-v*) : toutes les versions sont archivées ; la plus récente alimente le bouton principal.
+mkdir -p desktop/versions
+: > desktop-rows.html
+desktops="$(echo "${releases}" | jq -c '[.[] | select(.tag_name | startswith("desktop-v"))]')"
+dcount="$(echo "${desktops}" | jq 'length')"
+if [ "${dcount}" -gt 0 ]; then
+  j=0
+  while [ "${j}" -lt "${dcount}" ]; do
+    rel="$(echo "${desktops}" | jq -c ".[${j}]")"
+    dver="$(echo "${rel}" | jq -r '.tag_name | ltrimstr("desktop-v")')"
+    day="$(echo "${rel}" | jq -r '.published_at[0:10]')"
+    dcached="$(ensure desktop "${dver}" "${rel}" aria-remote-desktop.exe)"
+    place "${dcached}" "desktop/versions/${dver}/aria-remote-desktop.exe"
+    dsum="$(cut -d' ' -f1 "${dcached}.sha256")"; dsize="$(du -h "${dcached}" | cut -f1)"
+    badge=""
+    if [ "${j}" -eq 0 ]; then
+      badge='<span class="tag">Dernière</span>'
+      place "${dcached}" desktop/aria-remote-desktop.exe
+      printf '<a class="cta small" href="/remote/desktop/aria-remote-desktop.exe" download><svg class="i"><use href="#i-download"/></svg>Télécharger pour Windows</a>\n<p class="meta">Version %s · %s · aucune installation</p>\n<code class="hash" title="Empreinte SHA-256">%s</code>\n' "${dver}" "${dsize}" "${dsum}" > desktop.html
+    fi
+    printf '<li class="ver"><span class="vn"><b>%s</b>%s</span><span class="vd">%s</span><span class="vs">%s</span><code class="vh" title="Empreinte SHA-256">%s</code><a class="vl" href="/remote/desktop/versions/%s/aria-remote-desktop.exe" download title="Télécharger" aria-label="Télécharger"><svg class="i"><use href="#i-download"/></svg></a></li>\n' \
+      "${dver}" "${badge}" "${day}" "${dsize}" "${dsum}" "${dver}" >> desktop-rows.html
+    j=$((j + 1))
+  done
+  echo "Application de bureau : ${dcount} version(s)."
 else
   printf '<span class="soon"><svg class="i"><use href="#i-play"/></svg>Bientôt disponible</span>\n<p class="meta">Elle est en cours de développement.</p>\n' > desktop.html
   echo "Pas de version desktop publiée : « Bientôt disponible »."
