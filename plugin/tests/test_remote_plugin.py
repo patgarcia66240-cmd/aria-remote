@@ -789,3 +789,16 @@ def test_a_controller_decision_clears_the_pending_key_on_the_server(remote):
     remote.store.get(DEVICE).controller_pending = controller
     assert remote.service.controller_decided(DEVICE, False).controller_pending is None
     assert remote.audit.names()[-1] == "CONTROLLER_KEY_REFUSED"
+
+
+def test_the_signed_answer_is_kept_and_returned_to_the_controller_for_verification(remote):
+    """Point 2 de l'audit : le serveur ne se contente pas de vérifier la réponse de l'agent, il la transmet avec sa signature
+    pour que le contrôleur la vérifie lui-même (sinon un serveur compromis pourrait changer l'extrémité média)."""
+    agent = paired(remote)
+    session = run(remote.service.create_session(DEVICE))
+    run(remote.service.submit_offer(session.session_id, "v=0 offer"))
+    signature = agent.answer(session)
+    remote.service.submit_answer(session.session_id, "v=0 answer", signature)
+    view = remote.service.signaling_view(session.session_id)
+    assert view["answer"] == "v=0 answer"
+    assert view["answer_signature"] == signature

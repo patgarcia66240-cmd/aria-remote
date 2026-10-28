@@ -304,6 +304,7 @@ class RemoteService:
             raise
         reconnected = session.state is SessionState.RECONNECTING
         session.answer = answer
+        session.answer_signature = signature
         self._move(session, SessionState.CONNECTED)
         if reconnected:
             self.audit.record("REMOTE_RECONNECTED", device_id=session.device_id, session_id=session_id)
@@ -333,7 +334,7 @@ class RemoteService:
     def signaling_view(self, session_id: str, after: int = 0) -> dict:
         """Ce que le contrôleur vient chercher : la réponse de l'agent et ses candidats ICE à partir du n-ième."""
         session = self.session(session_id)
-        return {"state": session.state.value, "answer": session.answer, "ice": session.agent_ice[after:], "next": len(session.agent_ice)}
+        return {"state": session.state.value, "answer": session.answer, "answer_signature": session.answer_signature, "ice": session.agent_ice[after:], "next": len(session.agent_ice)}
 
     def _ice_session(self, session_id: str, candidate: str) -> Session:
         session = self._signaling_session(session_id, {SessionState.CONNECTING, SessionState.CONNECTED, SessionState.RECONNECTING})

@@ -48,6 +48,7 @@ class Session:
     state_changed_at: float = field(default_factory=time.monotonic)
     offer: str = ""
     answer: str = ""
+    answer_signature: str = ""                              # signature de l'agent sur sa réponse : relayée au contrôleur, qui la vérifie (point 2)
     ice: list[str] = field(default_factory=list)             # candidats ICE du contrôleur
     agent_ice: list[str] = field(default_factory=list)       # candidats ICE de l'agent
 
