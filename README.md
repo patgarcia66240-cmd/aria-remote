@@ -5,9 +5,11 @@ Contrôle d'un PC à distance, sécurisé : un **agent Windows** (fenêtre local
 ![Vue d'ensemble d'ARIA Remote](docs/images/aria-remote-overview.svg)
 
 **Comment ça marche :**
-1. Les deux PC se connectent au **serveur de rendez-vous** (le contrôleur en HTTPS, l'agent en WSS). Le code à 6 chiffres affiché par l'agent sert à les appairer.
-2. Une fois appairés, ils échangent **directement** l'écran, la souris et le clavier, chiffrés (WebRTC). Le serveur ne voit pas passer l'écran ; seul le relais TURN sert en dernier recours.
+1. Les deux PC se connectent au **serveur de rendez-vous** (le contrôleur en HTTPS, l'agent en WSS). Le code à 6 chiffres affiché par l'agent sert à les appairer. À l'appairage, chaque PC garde la clé publique de l'autre et la fait confirmer par empreinte.
+2. Une fois appairés, ils échangent **directement** l'écran, la souris et le clavier, chiffrés (WebRTC). Chaque offre est **signée par le contrôleur** et chaque réponse **signée par l'agent** : l'agent refuse toute offre non signée, et le contrôleur refuse toute réponse non signée par la clé épinglée. Le serveur ne voit pas passer l'écran ; seul le relais TURN sert en dernier recours.
 3. Le propriétaire du PC distant **accepte chaque prise de contrôle** et choisit ce qui est autorisé (souris, clavier).
+
+Détail des règles de signature et de l'ordre de déploiement : [`docs/SIGNATURE_CONTROLEUR.md`](docs/SIGNATURE_CONTROLEUR.md).
 
 | Dossier | Contenu |
 |---|---|
