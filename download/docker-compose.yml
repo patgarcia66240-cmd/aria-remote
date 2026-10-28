@@ -1,6 +1,6 @@
 # Page de téléchargement de l'agent sur un serveur qui a DÉJÀ un Traefik (modèle « Ubuntu avec n8n » de Hostinger).
 # La page se met à jour toute seule (toutes les REFRESH_SECONDS) : il suffit de publier une version sur GitHub. Dépôt public : aucun jeton.
-# Variables facultatives (fichier .env ou « Environment » du projet) : SITE_HOST (par défaut processxen.com), REFRESH_SECONDS (par défaut 600).
+# Variables facultatives (fichier .env ou « Environment » du projet) : SITE_HOST (par défaut xendev.eu), REFRESH_SECONDS (par défaut 600).
 services:
   download:
     build:
@@ -16,10 +16,13 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-n8n_default}
-      - traefik.http.routers.pc-download.rule=Host(`${SITE_HOST:-processxen.com}`) || Host(`www.${SITE_HOST:-processxen.com}`)
+      # La page est servie sous xendev.eu/remote uniquement. Le préfixe /remote est retiré avant nginx. Aucune redirection.
+      - traefik.http.routers.pc-download.rule=Host(`${SITE_HOST:-xendev.eu}`) && PathPrefix(`/remote`)
       - traefik.http.routers.pc-download.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
       - traefik.http.routers.pc-download.tls=true
       - traefik.http.routers.pc-download.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-mytlschallenge}
+      - traefik.http.routers.pc-download.middlewares=pc-download-strip
+      - traefik.http.middlewares.pc-download-strip.stripprefix.prefixes=/remote
       - traefik.http.services.pc-download.loadbalancer.server.port=80
 
 volumes:

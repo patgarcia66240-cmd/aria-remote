@@ -135,7 +135,8 @@ pub async fn launch(settings: Settings) -> Result<Launched> {
         println!("Réglages retenus dans {} : la prochaine fois, plus rien à saisir.", path.display());
     }
     let allow = input::parse_allow(config.allow.as_deref().unwrap_or(""));
-    let fingerprint = identity::sha256_hex(&identity.public_key())[..16].to_string();
+    // Même empreinte que celle que le contrôleur affiche pour cet appareil (identity::fingerprint) : les deux écrans se comparent tels quels.
+    let fingerprint = identity::fingerprint(&identity.public_key())?;
     println!("Empreinte de la clé : {fingerprint}");
 
     let (commands_tx, commands_rx) = mpsc::unbounded_channel();

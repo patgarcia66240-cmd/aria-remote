@@ -373,6 +373,12 @@ $('code').addEventListener('input', () => {
   $('pair-btn').disabled = digits.length !== 6
 })
 
+if (invoke) {
+  invoke('controller_identity').then((info) => {
+    $('pair-fp').textContent = `Empreinte de ce contrôleur : ${info.fingerprint}. Compare-la avec celle affichée sur le PC à contrôler, avant d'appairer.`
+  }).catch(() => {})
+}
+
 $('pair-form').addEventListener('submit', async (event) => {
   event.preventDefault()
   const code = pairingDigits($('code').value)
@@ -380,9 +386,19 @@ $('pair-form').addEventListener('submit', async (event) => {
   showError($('pair-err'), ''); show($('pair-ok'), false)
   $('pair-btn').disabled = true
   try {
-    const { device } = await request.post('/pair', { code })
+    // La clé publique de ce contrôleur est remise à l'appairage (phase 3a) : l'agent la fera confirmer sur son PC avant de la retenir.
+    const controller = invoke ? await invoke('controller_identity').catch(() => null) : null
+    const { device } = await request.post('/pair', controller ? { code, controller_key: controller.public_key } : { code })
     $('code').value = ''
-    $('pair-ok').textContent = `${device?.name || 'Appareil'} est appairé.`; show($('pair-ok'), true)
+    // Point 2 : on épingle la clé de l'appareil reçue à l'appairage. Sans elle, ses réponses ne seront pas acceptées.
+    let pinned = ''
+    if (invoke && device?.public_key) {
+      const fingerprint = await invoke('pin_device', { deviceId: device.device_id, publicKey: device.public_key })
+      pinned = ` Empreinte de l'appareil : ${fingerprint}. Compare-la avec celle affichée par l'agent sur le PC.`
+    } else {
+      pinned = ' Le serveur n\'a pas renvoyé la clé de l\'appareil : le contrôle sera refusé tant qu\'il ne l\'est pas.'
+    }
+    $('pair-ok').textContent = `${device?.name || 'Appareil'} est appairé.${pinned}`; show($('pair-ok'), true)
     refresh()
   } catch (error) {
     showError($('pair-err'), message(error))

@@ -41,6 +41,7 @@ class LoopbackAgentGateway:
         self.opened: list[str] = []
         self.closed: list[str] = []
         self.signals: list[tuple[str, str, str]] = []
+        self.offer_signatures: list[str] = []      # signature du contrôleur reçue avec chaque offre (vide = absente)
 
     async def is_online(self, device_id: str) -> bool:
         return device_id in self.online
@@ -55,8 +56,10 @@ class LoopbackAgentGateway:
     async def close_session(self, session_id: str) -> None:
         self.closed.append(session_id)
 
-    async def send_signal(self, session: Session, kind: str, value: str) -> None:
+    async def send_signal(self, session: Session, kind: str, value: str, signature: str | None = None) -> None:
         self.signals.append((session.session_id, kind, value))
+        if kind == "offer":
+            self.offer_signatures.append(signature or "")
 
 
 class MemoryDeviceStore:
@@ -82,14 +85,15 @@ class JsonDeviceStore(MemoryDeviceStore):
         try:
             for raw in json.loads(path.read_text(encoding="utf-8")):
                 self._devices[raw["device_id"]] = Device(raw["device_id"], raw["name"], raw["public_key"], raw.get("platform", "windows"), bool(raw.get("paired")),
-                                                         frozenset(Permission(p) for p in raw.get("granted", [])), float(raw.get("registered_at", 0)))
+                                                         frozenset(Permission(p) for p in raw.get("granted", [])), float(raw.get("registered_at", 0)),
+                                                         controller_pending=raw.get("controller_pending"))
         except (OSError, ValueError, KeyError):
             self._devices.clear()       # fichier absent ou illisible : on repart de zéro, le prochain appairage le recréera
 
     def save(self, device: Device) -> None:
         super().save(device)
         rows = [{"device_id": d.device_id, "name": d.name, "public_key": d.public_key, "platform": d.platform, "paired": d.paired,
-                 "granted": sorted(p.value for p in d.granted), "registered_at": d.registered_at} for d in self._devices.values()]
+                 "granted": sorted(p.value for p in d.granted), "registered_at": d.registered_at, "controller_pending": d.controller_pending} for d in self._devices.values()]
         self.path.parent.mkdir(parents=True, exist_ok=True)
         handle, temp = tempfile.mkstemp(dir=self.path.parent, suffix=".tmp")
         with os.fdopen(handle, "w", encoding="utf-8") as out:

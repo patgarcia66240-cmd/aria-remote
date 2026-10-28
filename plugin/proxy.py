@@ -60,6 +60,10 @@ def build_router() -> APIRouter:
 
     @router.api_route("/{path:path}", methods=["GET", "POST", "DELETE"])
     async def forward(path: str, request: Request) -> Response:
+        # Fail closed : ce relais détient la clé du contrôleur. Sans jeton local, n'importe quel appelant du backend pourrait s'en servir.
+        if not settings.API_AUTH_TOKEN:
+            return Response(content='{"detail": "API_AUTH_TOKEN requis : le relais de rendez-vous refuse de fonctionner sans jeton local."}',
+                            status_code=503, media_type="application/json")
         if path.startswith(AGENT_PREFIXES):
             return Response(content='{"detail": "Route réservée aux agents."}', status_code=404, media_type="application/json")
         try:

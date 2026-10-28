@@ -165,6 +165,12 @@ def test_the_relay_serves_the_same_routes_and_keeps_the_server_key_server_side(r
     assert CONTROLLER_KEY not in relay.http.get("/api/remote/status").text
 
 
+def test_the_relay_refuses_to_forward_without_a_local_token(relay, monkeypatch):
+    monkeypatch.setattr(security.settings, "API_AUTH_TOKEN", "", raising=False)
+    down = relay.http.get("/api/remote/devices")
+    assert down.status_code == 503 and "API_AUTH_TOKEN requis" in down.json()["detail"]
+
+
 def test_the_relay_never_forwards_agent_routes(relay):
     agent = Agent()
     assert relay.http.post("/api/remote/devices/register", json=agent.register_args()).status_code == 404

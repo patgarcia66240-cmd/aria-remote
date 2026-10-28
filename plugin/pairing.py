@@ -39,6 +39,11 @@ class PairingBook:
         self._codes[code] = (device_id, self._clock() + self.ttl)
         return code
 
+    def pending(self, device_id: str) -> bool:
+        """Un code valide existe-t-il déjà pour cet appareil (non expiré) ?"""
+        now = self._clock()
+        return any(owner == device_id and expires > now for owner, expires in self._codes.values())
+
     def redeem(self, code: str) -> str:
         """Appareil correspondant au code, qui est consommé ; sinon PairingFailed (ou PairingLocked après trop d'échecs)."""
         now = self._clock()

@@ -34,6 +34,7 @@ class RegisterBody(BaseModel):
 
 class PairBody(BaseModel):
     code: str = Field(pattern=r"^\d{6}$")
+    controller_key: str | None = Field(default=None, min_length=43, max_length=44)   # clé publique du contrôleur (phase 3, en attente)
 
 
 class SessionBody(BaseModel):
@@ -48,6 +49,10 @@ class SdpBody(BaseModel):
 
 class AnswerBody(SdpBody):
     signature: str = Field(pattern=SIGNATURE_PATTERN)            # signature de identity.answer_message, faite par l'agent
+
+
+class OfferBody(SdpBody):
+    signature: str | None = Field(default=None, pattern=SIGNATURE_PATTERN)           # signature du contrôleur sur son offre (facultative)
 
 
 class IceBody(BaseModel):
@@ -78,7 +83,9 @@ async def register_device(body: RegisterBody) -> dict:
 
 @pairing_router.post("/pair")
 async def pair(body: PairBody) -> dict:
-    return {"device": service.pair(body.code).to_dict()}
+    # La clé publique de l'appareil n'est remise qu'ici, à l'appairage : le contrôleur l'épingle pour vérifier les réponses de l'agent (point 2).
+    device = service.pair(body.code, body.controller_key)
+    return {"device": {**device.to_dict(), "public_key": device.public_key}}
 
 
 @router.get("/devices")
@@ -122,8 +129,8 @@ async def signaling(session_id: str, after: int = Query(default=0, ge=0, le=1000
 
 
 @router.post("/signaling/offer")
-async def offer(body: SdpBody) -> dict:
-    return (await service.submit_offer(body.session_id, body.sdp)).to_dict()
+async def offer(body: OfferBody) -> dict:
+    return (await service.submit_offer(body.session_id, body.sdp, body.signature)).to_dict()
 
 
 @router.post("/signaling/answer")
@@ -161,7 +168,8 @@ async def agent_socket(websocket: WebSocket, device_id: str = Query(pattern=ID_P
 
     connection = AgentConnection(device_id, send, lambda: websocket.close(code=4000, reason="Remplacé par une nouvelle connexion."))
     await hub.attach(connection)
-    await websocket.send_json({"type": "ready", "ice_servers": ice.ice_servers(device_id)})
+    # La clé du contrôleur en attente (phase 3b) est proposée à la personne sur l'appareil : elle ne sert à rien tant qu'elle n'est pas acceptée.
+    await websocket.send_json({"type": "ready", "ice_servers": ice.ice_servers(device_id), "controller_pending": device.controller_pending})
     try:
         while True:
             text = await websocket.receive_text()
@@ -199,6 +207,8 @@ async def _agent_message(connection: AgentConnection, message: dict) -> None:
         service.agent_resumed(session_id, device_id)
     elif kind == "bye":
         service.agent_ended(session_id, device_id)
+    elif kind == "controller_decision":
+        service.controller_decided(device_id, bool(message.get("accepted")))
     elif kind != "ping":
         raise ValueError("type inconnu")
 

@@ -75,6 +75,11 @@ class RemoteService:
         if known and known.paired and known.public_key != public_key:
             self.audit.record("AUTHENTICATION_FAILED", device_id=device_id, result="refused", reason="public_key_mismatch")
             raise InvalidState("Cet appareil est déjà appairé avec une autre identité.")
+        # Appareil non appairé mais avec un code en cours : une autre clé ne peut pas remplacer la première tant que ce code est valide
+        # (sinon une clé d'agent divulguée détourne l'identité avant l'appairage, et invalide le code du vrai agent).
+        if known and not known.paired and known.public_key != public_key and self.pairing.pending(device_id):
+            self.audit.record("AUTHENTICATION_FAILED", device_id=device_id, result="refused", reason="pending_key_change")
+            raise InvalidState("Cet appareil attend déjà son appairage avec une autre clé : réessaie après expiration du code.")
         device = known or Device(device_id, name, public_key, platform)
         device.name = name
         device.public_key = public_key       # appareil pas encore appairé : il peut changer de clé, pas un appareil appairé (refusé plus haut)
@@ -82,7 +87,9 @@ class RemoteService:
         self.audit.record("PAIRING_REQUESTED", device_id=device_id)
         return device, self.pairing.issue(device_id)
 
-    def pair(self, code: str) -> Device:
+    def pair(self, code: str, controller_key: str | None = None) -> Device:
+        if controller_key is not None:
+            identity.parse_public_key(controller_key)          # clé invalide = refus, avant toute autre action
         try:
             device_id = self.pairing.redeem(code)
         except Exception:
@@ -92,8 +99,19 @@ class RemoteService:
         if device is None:
             raise NotFound("Appareil inconnu.")
         device.paired = True
+        if controller_key is not None:
+            # En attente seulement : l'agent ne l'acceptera qu'après confirmation sur l'appareil (phase 3b).
+            device.controller_pending = controller_key
         self.store.save(device)
-        self.audit.record("PAIRING_ACCEPTED", device_id=device_id)
+        self.audit.record("PAIRING_ACCEPTED", device_id=device_id, result="controller_key_pending" if controller_key else "ok")
+        return device
+
+    def controller_decided(self, device_id: str, accepted: bool) -> Device:
+        """Décision de la personne sur l'appareil : la clé en attente est retirée dans les deux cas. L'agent garde seul la clé acceptée."""
+        device = self.device(device_id)
+        device.controller_pending = None
+        self.store.save(device)
+        self.audit.record("CONTROLLER_KEY_ACCEPTED" if accepted else "CONTROLLER_KEY_REFUSED", device_id=device_id)
         return device
 
     def set_platform(self, device_id: str, platform: str) -> Device:
@@ -262,10 +280,10 @@ class RemoteService:
         hub.forget_session(session_id)
 
     # -- signaling : on relaie des textes, jamais de flux --------------------------------------------------------------------
-    async def submit_offer(self, session_id: str, sdp: str) -> Session:
+    async def submit_offer(self, session_id: str, sdp: str, signature: str | None = None) -> Session:
         session = self._signaling_session(session_id, {SessionState.CONNECTING, SessionState.RECONNECTING})
         offer = self._sdp(sdp)
-        await self.gateway.send_signal(session, "offer", offer)
+        await self.gateway.send_signal(session, "offer", offer, signature)
         session.offer, session.answer = offer, ""
         session.agent_ice.clear()
         return session
@@ -286,6 +304,7 @@ class RemoteService:
             raise
         reconnected = session.state is SessionState.RECONNECTING
         session.answer = answer
+        session.answer_signature = signature
         self._move(session, SessionState.CONNECTED)
         if reconnected:
             self.audit.record("REMOTE_RECONNECTED", device_id=session.device_id, session_id=session_id)
@@ -315,7 +334,7 @@ class RemoteService:
     def signaling_view(self, session_id: str, after: int = 0) -> dict:
         """Ce que le contrôleur vient chercher : la réponse de l'agent et ses candidats ICE à partir du n-ième."""
         session = self.session(session_id)
-        return {"state": session.state.value, "answer": session.answer, "ice": session.agent_ice[after:], "next": len(session.agent_ice)}
+        return {"state": session.state.value, "answer": session.answer, "answer_signature": session.answer_signature, "ice": session.agent_ice[after:], "next": len(session.agent_ice)}
 
     def _ice_session(self, session_id: str, candidate: str) -> Session:
         session = self._signaling_session(session_id, {SessionState.CONNECTING, SessionState.CONNECTED, SessionState.RECONNECTING})

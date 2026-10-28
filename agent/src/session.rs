@@ -14,7 +14,7 @@
 
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
 use serde::Deserialize;
@@ -84,7 +84,8 @@ pub enum Message {
 
 /// Tout ce qu'une session partage entre ses canaux : droits, saisie, écrans, réglages d'image, presse-papiers.
 pub struct Session {
-    permissions: HashSet<Permission>,
+    /// Modifiable pendant la session : la personne peut retirer la souris ou le clavier, et cela s'applique tout de suite.
+    permissions: RwLock<HashSet<Permission>>,
     input: SharedInput,
     screens: Screens,
     clipboard: SharedClipboard,
@@ -100,7 +101,7 @@ impl Session {
     pub fn new(permissions: HashSet<Permission>, input: SharedInput, screens: Screens, clipboard: SharedClipboard) -> Arc<Self> {
         let primary = screens.primary();
         let initial = clipboard.lock().ok().and_then(|mut c| c.get_text());
-        let session = Arc::new(Self { permissions, input, screens, clipboard, stream: Mutex::new(StreamSettings::initial(primary)), sync: Mutex::new(clipboard::Sync::new(initial)), control: Mutex::new(None), stats_wanted: AtomicBool::new(false) });
+        let session = Arc::new(Self { permissions: RwLock::new(permissions), input, screens, clipboard, stream: Mutex::new(StreamSettings::initial(primary)), sync: Mutex::new(clipboard::Sync::new(initial)), control: Mutex::new(None), stats_wanted: AtomicBool::new(false) });
         session.point_input_at(primary);
         session
     }
@@ -125,9 +126,10 @@ impl Session {
         let screens = self.list();
         let selected = self.settings().screen;
         let (width, height) = screens.get(selected).map(|s| (s.width, s.height)).or_else(|| self.input.lock().ok().map(|s| s.display_size())).unwrap_or((0, 0));
-        let mut names: Vec<&str> = self.permissions.iter().map(|p| p.as_str()).collect();
+        let current = self.snapshot();
+        let mut names: Vec<&str> = current.iter().map(|p| p.as_str()).collect();
         names.sort_unstable();
-        let features: Vec<&str> = FEATURES.iter().copied().filter(|f| *f != "clipboard" || self.permissions.contains(&Permission::ControlKeyboard)).collect();
+        let features: Vec<&str> = FEATURES.iter().copied().filter(|f| *f != "clipboard" || self.allows(Permission::ControlKeyboard)).collect();
         json!({"t": "info", "width": width, "height": height, "permissions": names, "screens": screens, "screen": selected, "features": features})
     }
 
@@ -147,11 +149,27 @@ impl Session {
     }
 
     /// Traite un message du canal « control » et renvoie les réponses à envoyer. Aucune entrée/sortie réseau ici : tout est testable.
+    /// Droit courant. Fail closed : un verrou empoisonné refuse tout.
+    fn allows(&self, permission: Permission) -> bool {
+        self.permissions.read().map(|set| set.contains(&permission)).unwrap_or(false)
+    }
+
+    fn snapshot(&self) -> HashSet<Permission> {
+        self.permissions.read().map(|set| set.clone()).unwrap_or_default()
+    }
+
+    /// Réduit les droits de la session à ce qui reste autorisé (jamais d'élargissement). Appelé quand la personne retire un droit.
+    pub fn restrict(&self, allowed: &HashSet<Permission>) {
+        if let Ok(mut set) = self.permissions.write() {
+            set.retain(|p| allowed.contains(p));
+        }
+    }
+
     pub fn process(&self, data: &[u8]) -> Vec<Value> {
         let denied = |reason: &str| vec![json!({"t": "denied", "reason": reason})];
         if let Ok(control) = serde_json::from_slice::<Control>(data) {
             return match self.input.lock() {
-                Ok(mut sink) => match input::apply(&control, &self.permissions, sink.as_mut()) {
+                Ok(mut sink) => match input::apply(&control, &self.snapshot(), sink.as_mut()) {
                     Ok(()) => vec![],
                     Err(reason) => denied(reason),
                 },
@@ -165,7 +183,7 @@ impl Session {
         match message {
             Message::Ping { id } => vec![json!({"t": "pong", "id": id})],
             Message::Stream { fps, quality, width } => {
-                if !self.permissions.contains(&Permission::ViewScreen) {
+                if !self.allows(Permission::ViewScreen) {
                     return denied("permission refusée");
                 }
                 if let Ok(mut stream) = self.stream.lock() {
@@ -174,7 +192,7 @@ impl Session {
                 vec![]
             }
             Message::Screen { index } => {
-                if !self.permissions.contains(&Permission::ViewScreen) {
+                if !self.allows(Permission::ViewScreen) {
                     return denied("permission refusée");
                 }
                 if index >= self.list().len() {
@@ -187,7 +205,7 @@ impl Session {
                 vec![self.info()]
             }
             Message::Clip { text } => {
-                if !self.permissions.contains(&Permission::ControlKeyboard) {
+                if !self.allows(Permission::ControlKeyboard) {
                     return denied("permission refusée");
                 }
                 let (Ok(mut sync), Ok(mut clipboard)) = (self.sync.lock(), self.clipboard.lock()) else { return denied("presse-papiers indisponible") };
@@ -201,7 +219,7 @@ impl Session {
 
     /// Texte à envoyer au contrôleur si le presse-papiers de l'appareil a changé (permission clavier requise).
     fn clipboard_change(&self) -> Option<String> {
-        if !self.permissions.contains(&Permission::ControlKeyboard) {
+        if !self.allows(Permission::ControlKeyboard) {
             return None;
         }
         let current = self.clipboard.lock().ok().and_then(|mut c| c.get_text());
@@ -222,7 +240,7 @@ impl Session {
 pub fn attach_channel(channel: Arc<RTCDataChannel>, session: Arc<Session>) {
     match channel.label() {
         "frames" => {
-            if session.permissions.contains(&Permission::ViewScreen) {
+            if session.allows(Permission::ViewScreen) {
                 let on_open = channel.clone();
                 on_open.on_open(Box::new(move || {
                     start_frames(channel, session);
@@ -251,7 +269,7 @@ fn attach_control(channel: Arc<RTCDataChannel>, session: Arc<Session>) {
             }
             let _ = channel.send_text(session.info().to_string()).await;
             tokio::spawn(share_cursor(channel.clone(), session.clone()));
-            if session.permissions.contains(&Permission::ControlKeyboard) {
+            if session.allows(Permission::ControlKeyboard) {
                 tokio::spawn(share_clipboard(channel, session));
             }
         })
@@ -479,6 +497,16 @@ mod tests {
         let (all, _) = session(&ALL, None);
         assert_eq!(all.info()["features"], json!(["ping", "stream", "screens", "clipboard", "pointer", "stats"]));
         assert_eq!(all.info()["permissions"], json!(["control_keyboard", "control_mouse", "view_screen"]));
+    }
+
+    #[test]
+    fn a_right_withdrawn_during_the_session_stops_applying_at_once_and_is_never_regained() {
+        let (all, _) = session(&[Permission::ViewScreen, Permission::ControlMouse, Permission::ControlKeyboard], None);
+        let allowed: HashSet<Permission> = HashSet::from([Permission::ViewScreen]);
+        all.restrict(&allowed);
+        assert_eq!(all.info()["permissions"], json!(["view_screen"]));
+        all.restrict(&HashSet::from([Permission::ViewScreen, Permission::ControlMouse, Permission::ControlKeyboard]));
+        assert_eq!(all.info()["permissions"], json!(["view_screen"]), "un droit retiré ne se réactive jamais dans la même session");
     }
 
     #[test]

@@ -19,7 +19,7 @@ from plugin_sdk.ports import ports
 from plugin_sdk.router import unprotected_routes
 from plugins.remote import adapters, chat_handler, ice, identity, permissions, states
 from plugins.remote.gateway import AgentConnection, AgentHub, hub
-from plugins.remote.errors import AgentUnavailable, InvalidState, NotFound, PairingFailed, PairingLocked, PermissionDenied
+from plugins.remote.errors import AgentUnavailable, InvalidState, NotFound, PairingFailed, PairingLocked, PermissionDenied, RemoteError
 from plugins.remote.pairing import PairingBook
 from plugins.remote.permissions import Permission
 from plugins.remote.ports import PORT_AGENT, PORT_AUDIT, PORT_STORE
@@ -216,9 +216,21 @@ def test_pairing_registers_the_device_and_a_paired_device_cannot_be_taken_over(r
     assert "key" not in json.dumps(run(remote.service.list_devices())) and run(remote.service.list_devices())[0]["online"] is True
 
 
-def test_an_unpaired_device_may_change_its_key_but_only_by_proving_the_new_one(remote):
+def test_an_unpaired_device_cannot_swap_its_key_while_a_code_is_pending(remote):
     first, second = Agent(), Agent()
     remote.service.register_device(**first.register_args())
+    with pytest.raises(InvalidState, match="attend déjà"):
+        remote.service.register_device(**second.register_args())      # un code valide existe : la clé ne change pas
+    assert remote.store.get(DEVICE).public_key == first.public_key
+    assert remote.audit.names()[-1] == "AUTHENTICATION_FAILED"
+
+
+def test_an_unpaired_device_may_change_its_key_once_its_code_has_expired(remote):
+    clock = [1000.0]
+    remote.service.pairing = PairingBook(clock=lambda: clock[0], ttl=60)
+    first, second = Agent(), Agent()
+    remote.service.register_device(**first.register_args())
+    clock[0] += 61                                                     # le code est expiré
     remote.service.register_device(**second.register_args())
     assert remote.store.get(DEVICE).public_key == second.public_key
 
@@ -733,3 +745,70 @@ def test_the_manifest_is_valid_and_the_plugin_starts_disabled():
     manifest = json.loads((PLUGIN / "manifest.json").read_text(encoding="utf-8"))
     assert validate(manifest, PLUGIN).ok and manifest["enabled_by_default"] is False and manifest["permission"] == "EXTERNAL"
     assert validate(manifest, PLUGIN).advice == []
+
+
+# -- phase 3a (docs/SIGNATURE_CONTROLEUR.md) : clé du contrôleur en attente, signature relayée -----------------------------------
+def controller_public_key() -> str:
+    return base64.b64encode(Ed25519PrivateKey.generate().public_key().public_bytes_raw()).decode()
+
+
+def test_the_controller_key_is_kept_pending_and_never_shown_or_forwarded_before_confirmation(remote):
+    agent = Agent()
+    _, code = remote.service.register_device(**agent.register_args())
+    controller = controller_public_key()
+    device = remote.service.pair(code, controller)
+    assert device.paired is True and device.controller_pending == controller
+    assert controller not in json.dumps(device.to_dict()), "la clé du contrôleur ne doit jamais apparaître dans les réponses"
+    assert "PAIRING_ACCEPTED" in remote.audit.names()
+
+
+def test_a_malformed_controller_key_is_refused_and_nothing_is_paired(remote):
+    agent = Agent()
+    _, code = remote.service.register_device(**agent.register_args())
+    with pytest.raises(RemoteError):
+        remote.service.pair(code, "pas-une-cle")
+    assert remote.store.get(DEVICE).paired is False, "une clé invalide ne doit rien appairer"
+
+
+def test_the_offer_signature_is_relayed_unchanged_to_the_agent(remote):
+    agent = paired(remote)
+    connect_session = run(remote.service.create_session(DEVICE, None))
+    signature = base64.b64encode(b"x" * 64).decode()
+    run(remote.service.submit_offer(connect_session.session_id, "v=0 offer", signature))
+    assert remote.gateway.offer_signatures == [signature]
+    run(remote.service.submit_offer(connect_session.session_id, "v=0 offer 2"))
+    assert remote.gateway.offer_signatures[-1] == "", "sans signature, rien n'est inventé"
+
+
+def test_a_controller_decision_clears_the_pending_key_on_the_server(remote):
+    agent = paired(remote)
+    controller = controller_public_key()
+    remote.store.get(DEVICE).controller_pending = controller
+    decided = remote.service.controller_decided(DEVICE, True)
+    assert decided.controller_pending is None and remote.audit.names()[-1] == "CONTROLLER_KEY_ACCEPTED"
+    remote.store.get(DEVICE).controller_pending = controller
+    assert remote.service.controller_decided(DEVICE, False).controller_pending is None
+    assert remote.audit.names()[-1] == "CONTROLLER_KEY_REFUSED"
+
+
+def test_the_signed_answer_is_kept_and_returned_to_the_controller_for_verification(remote):
+    """Point 2 de l'audit : le serveur ne se contente pas de vérifier la réponse de l'agent, il la transmet avec sa signature
+    pour que le contrôleur la vérifie lui-même (sinon un serveur compromis pourrait changer l'extrémité média)."""
+    agent = paired(remote)
+    session = run(remote.service.create_session(DEVICE))
+    run(remote.service.submit_offer(session.session_id, "v=0 offer"))
+    signature = agent.answer(session)
+    remote.service.submit_answer(session.session_id, "v=0 answer", signature)
+    view = remote.service.signaling_view(session.session_id)
+    assert view["answer"] == "v=0 answer"
+    assert view["answer_signature"] == signature
+
+
+def test_the_pairing_response_gives_the_controller_the_device_key_to_pin(client):
+    """Point 2 : à l'appairage seulement, le contrôleur reçoit la clé publique de l'appareil pour l'épingler
+    (la liste des appareils ne donne que son empreinte)."""
+    agent = Agent()
+    code = client.post("/api/remote/devices/register", json=agent.register_args()).json()["pairing_code"]
+    paired = client.post("/api/remote/pair", json={"code": code}).json()["device"]
+    assert paired["public_key"] == agent.public_key
+    assert "public_key" not in client.get("/api/remote/devices").json()["devices"][0]

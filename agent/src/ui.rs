@@ -4,7 +4,8 @@
 //!
 //! Sécurité : la page peut AUTORISER une prise de contrôle, donc aucune autre page web du navigateur ne doit pouvoir l'actionner à ta place.
 //! - écoute en 127.0.0.1 seulement, sur un port choisi au hasard ;
-//! - chaque appel exige un jeton aléatoire propre à ce lancement (donné à la fenêtre dans l'adresse d'ouverture, jamais écrit sur le disque) ;
+//! - l'adresse d'ouverture ne contient qu'un TICKET à usage unique valable 60 s (il reste visible dans la ligne de commande du navigateur) ;
+//!   la fenêtre l'échange contre un cookie HttpOnly : le jeton de session ne quitte jamais l'agent et n'apparaît dans aucune ligne de commande ;
 //! - l'en-tête Host doit être celui de l'agent (contre le « DNS rebinding »).
 
 use std::sync::{Arc, Mutex};
@@ -32,6 +33,9 @@ const MAX_EVENTS: usize = 12;
 #[cfg_attr(not(windows), allow(dead_code))]
 const WINDOW_TITLE: &str = "ARIA Remote";
 const VISIBLE_WITHIN: Duration = Duration::from_secs(3);
+/// Durée de vie du ticket d'ouverture : assez pour lancer la fenêtre, trop court pour qu'une copie de la ligne de commande serve longtemps.
+const TICKET_TTL: Duration = Duration::from_secs(60);
+const SESSION_COOKIE: &str = "aria_session";
 
 /// Ordres donnés par la fenêtre à l'agent.
 #[derive(Debug, PartialEq)]
@@ -42,6 +46,8 @@ pub enum UiCommand {
     Configure { server: String, api_key: String },
     /// Demande un NOUVEAU code d'appairage, même si l'appareil est déjà appairé (autre contrôleur, appareil retiré de la liste...).
     NewPairingCode,
+    /// Décision sur le contrôleur qui attend d'être reconnu (phase 3b de docs/SIGNATURE_CONTROLEUR.md).
+    ControllerDecision { accept: bool },
     Quit,
 }
 
@@ -73,6 +79,8 @@ pub struct UiState {
     pub link_detail: String,
     pub pairing_code: Option<String>,
     pub pairing_expires_ms: Option<u64>,
+    /// Empreinte du contrôleur en attente de reconnaissance (phase 3b) ; None s'il n'y en a pas.
+    pub controller_fingerprint: Option<String>,
     pub allow_mouse: bool,
     pub allow_keyboard: bool,
     pub consent: Option<ConsentInfo>,
@@ -87,7 +95,10 @@ pub fn now_ms() -> u64 {
 pub struct UiShared {
     state: Mutex<UiState>,
     commands: UnboundedSender<UiCommand>,
+    /// Jeton de session : ne quitte jamais l'agent, il est remis au navigateur dans un cookie HttpOnly.
     token: String,
+    /// Ticket d'ouverture (valeur, instant de création), à usage unique.
+    ticket: Mutex<Option<(String, Instant)>>,
     port: u16,
     last_visible: Mutex<Option<Instant>>,
 }
@@ -98,7 +109,16 @@ impl UiShared {
     pub fn new(commands: UnboundedSender<UiCommand>, port: u16, initial: UiState) -> Ui {
         let mut raw = [0u8; 24];
         rand::rngs::OsRng.fill_bytes(&mut raw);
-        Arc::new(Self { state: Mutex::new(initial), commands, token: hex::encode(raw), port, last_visible: Mutex::new(None) })
+        let mut ticket_raw = [0u8; 24];
+        rand::rngs::OsRng.fill_bytes(&mut ticket_raw);
+        Arc::new(Self {
+            state: Mutex::new(initial),
+            commands,
+            token: hex::encode(raw),
+            ticket: Mutex::new(Some((hex::encode(ticket_raw), Instant::now()))),
+            port,
+            last_visible: Mutex::new(None),
+        })
     }
 
     /// Modifie l'état affiché (le verrou est tenu le temps de la closure : pas d'await dedans).
@@ -127,8 +147,26 @@ impl UiShared {
         self.last_visible.lock().ok().and_then(|seen| *seen).is_some_and(|seen| seen.elapsed() < VISIBLE_WITHIN)
     }
 
+    /// Adresse d'ouverture : seulement le ticket d'ouverture (rien qui permette d'agir sans l'échanger).
     pub fn url(&self) -> String {
-        format!("http://127.0.0.1:{}/?t={}", self.port, self.token)
+        let ticket = self.ticket.lock().ok().and_then(|t| t.as_ref().map(|(value, _)| value.clone())).unwrap_or_default();
+        format!("http://127.0.0.1:{}/?k={}", self.port, ticket)
+    }
+
+    /// Échange le ticket d'ouverture contre la session : valable une seule fois, dans le délai. Un ticket faux ne consomme pas le bon.
+    pub fn redeem_ticket(&self, given: &str) -> bool {
+        let Ok(mut slot) = self.ticket.lock() else { return false };
+        match slot.as_ref() {
+            Some((value, created)) if token_matches(Some(given), value) && created.elapsed() < TICKET_TTL => {
+                *slot = None;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn session_cookie(&self) -> String {
+        format!("{SESSION_COOKIE}={}; HttpOnly; SameSite=Strict; Path=/", self.token)
     }
 
     fn send(&self, command: UiCommand) -> bool {
@@ -146,16 +184,22 @@ pub fn token_matches(given: Option<&str>, expected: &str) -> bool {
     given.len() == expected.len() && given.bytes().zip(expected.bytes()).fold(0u8, |diff, (a, b)| diff | (a ^ b)) == 0
 }
 
+/// Valeur du cookie de session dans l'en-tête Cookie, s'il est présent.
+pub fn session_from_cookies(header_value: Option<&str>) -> Option<&str> {
+    header_value?.split(';').map(str::trim).find_map(|pair| pair.strip_prefix(SESSION_COOKIE).and_then(|rest| rest.strip_prefix('=')))
+}
+
 async fn guard(State(ui): State<Ui>, request: Request, next: Next) -> Response {
     let headers: &HeaderMap = request.headers();
     let host = headers.get(header::HOST).and_then(|v| v.to_str().ok());
     if !host_allowed(host, ui.port) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    // La page elle-même (GET /) est publique sur 127.0.0.1 : elle ne contient aucune donnée. Tout le reste exige le jeton.
-    if request.uri().path() != "/" {
-        let token = headers.get("x-token").and_then(|v| v.to_str().ok());
-        if !token_matches(token, &ui.token) {
+    // La page (GET /) ne contient aucune donnée, et l'échange du ticket (/api/login) est la seule entrée sans cookie. Tout le reste exige la session.
+    let path = request.uri().path();
+    if path != "/" && path != "/api/login" {
+        let cookie = headers.get(header::COOKIE).and_then(|v| v.to_str().ok());
+        if !token_matches(session_from_cookies(cookie), &ui.token) {
             return StatusCode::UNAUTHORIZED.into_response();
         }
     }
@@ -175,6 +219,18 @@ async fn page() -> Html<String> {
     Html(render_page())
 }
 
+#[derive(Deserialize)]
+struct LoginBody {
+    ticket: String,
+}
+
+async fn login(State(ui): State<Ui>, Json(body): Json<LoginBody>) -> Response {
+    if !ui.redeem_ticket(&body.ticket) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    (StatusCode::NO_CONTENT, [(header::SET_COOKIE, ui.session_cookie())]).into_response()
+}
+
 async fn state(State(ui): State<Ui>, axum::extract::Query(query): axum::extract::Query<StateQuery>) -> Json<UiState> {
     if query.v == 1 {
         if let Ok(mut seen) = ui.last_visible.lock() {
@@ -188,6 +244,15 @@ async fn state(State(ui): State<Ui>, axum::extract::Query(query): axum::extract:
 struct ConsentBody {
     session_id: String,
     accept: bool,
+}
+
+#[derive(Deserialize)]
+struct ControllerBody {
+    accept: bool,
+}
+
+async fn controller(State(ui): State<Ui>, Json(body): Json<ControllerBody>) -> StatusCode {
+    ack(ui.send(UiCommand::ControllerDecision { accept: body.accept }))
 }
 
 #[derive(Deserialize)]
@@ -234,12 +299,14 @@ async fn quit(State(ui): State<Ui>) -> StatusCode {
 pub fn router(ui: Ui) -> Router {
     Router::new()
         .route("/", get(page))
+        .route("/api/login", post(login))
         .route("/api/state", get(state))
         .route("/api/consent", post(consent))
         .route("/api/stop", post(stop))
         .route("/api/allow", post(allow))
         .route("/api/setup", post(setup))
         .route("/api/pairing-code", post(new_pairing_code))
+        .route("/api/controller", post(controller))
         .route("/api/quit", post(quit))
         .layer(middleware::from_fn_with_state(ui.clone(), guard))
         .with_state(ui)
@@ -374,7 +441,7 @@ mod tests {
     fn request(method: &str, path: &str, host: &str, token: Option<&str>, body: &str) -> axum::http::Request<Body> {
         let mut builder = axum::http::Request::builder().method(method).uri(path).header("host", host).header("content-type", "application/json");
         if let Some(token) = token {
-            builder = builder.header("x-token", token);
+            builder = builder.header("cookie", format!("{SESSION_COOKIE}={token}"));
         }
         builder.body(Body::from(body.to_string())).unwrap()
     }
@@ -386,6 +453,30 @@ mod tests {
         assert!(!host_allowed(Some("evil.example:4242"), 4242));      // DNS rebinding : un nom de domaine qui pointe sur 127.0.0.1
         assert!(!host_allowed(Some("127.0.0.1:9999"), 4242));
         assert!(!host_allowed(None, 4242));
+    }
+
+    #[test]
+    fn the_session_is_read_from_its_own_cookie_only() {
+        assert_eq!(session_from_cookies(Some("a=1; aria_session=abc; b=2")), Some("abc"));
+        assert_eq!(session_from_cookies(Some("aria_session_old=abc")), None);
+        assert_eq!(session_from_cookies(None), None);
+    }
+
+    #[tokio::test]
+    async fn the_ticket_is_exchanged_once_for_an_http_only_cookie_and_never_appears_in_the_url() {
+        let (ui, _rx, app) = setup();
+        assert!(!ui.url().contains(&ui.token), "le jeton de session ne doit jamais figurer dans l'adresse d'ouverture");
+        let ticket = ui.url().split("k=").nth(1).unwrap().to_string();
+        let login = |value: &str| request("POST", "/api/login", "127.0.0.1:4242", None, &format!(r#"{{"ticket":"{value}"}}"#));
+        assert_eq!(app.clone().oneshot(login("faux")).await.unwrap().status(), StatusCode::UNAUTHORIZED);
+        let first = app.clone().oneshot(login(&ticket)).await.unwrap();
+        assert_eq!(first.status(), StatusCode::NO_CONTENT);
+        let cookie = first.headers()[header::SET_COOKIE].to_str().unwrap().to_string();
+        assert!(cookie.contains("HttpOnly") && cookie.contains("SameSite=Strict"));
+        assert_eq!(app.clone().oneshot(login(&ticket)).await.unwrap().status(), StatusCode::UNAUTHORIZED, "un ticket ne sert qu'une fois");
+        let with_cookie = axum::http::Request::builder().method("GET").uri("/api/state").header("host", "127.0.0.1:4242")
+            .header("cookie", cookie.split(';').next().unwrap()).body(Body::empty()).unwrap();
+        assert_eq!(app.oneshot(with_cookie).await.unwrap().status(), StatusCode::OK);
     }
 
     #[test]
@@ -439,6 +530,17 @@ mod tests {
         assert_eq!(rx.try_recv().unwrap(), UiCommand::NewPairingCode);
         assert_eq!(rx.try_recv().unwrap(), UiCommand::Quit);
         assert_eq!(app.oneshot(post("/api/consent", "pas du json")).await.unwrap().status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn the_controller_decision_reaches_the_agent() {
+        let (ui, mut rx, app) = setup();
+        let token = ui.token.clone();
+        let ok = app.clone().oneshot(request("POST", "/api/controller", "127.0.0.1:4242", Some(&token), r#"{"accept":true}"#)).await.unwrap();
+        assert_eq!(ok.status(), StatusCode::NO_CONTENT);
+        assert_eq!(rx.try_recv().unwrap(), UiCommand::ControllerDecision { accept: true });
+        let refused = app.oneshot(request("POST", "/api/controller", "127.0.0.1:4242", None, r#"{"accept":false}"#)).await.unwrap();
+        assert_eq!(refused.status(), StatusCode::UNAUTHORIZED, "sans session, aucune décision ne passe");
     }
 
     #[test]

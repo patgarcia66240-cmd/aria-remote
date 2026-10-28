@@ -23,7 +23,7 @@ const DISCONNECTED_GRACE_MS = 5000
 export function createRequest(invoke) {
   const api = (path, options = {}) => invoke('api_request', { method: options.method || 'GET', path, body: null })
   const post = (path, body) => invoke('api_request', { method: 'POST', path, body: body ?? {} })
-  return { api, post }
+  return { sign: (sessionId, sdp) => invoke('controller_sign_offer', { sessionId, sdp }), verifyAnswer: (deviceId, sessionId, offer, answer, signature) => invoke('verify_answer', { deviceId, sessionId, offer, answer, signature }), api, post }
 }
 
 const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -161,7 +161,10 @@ export async function openSession({
       else queued.push(event.candidate)
     }
     await peer.setLocalDescription(await peer.createOffer())
-    await request.post('/signaling/offer', { session_id: sessionId, sdp: peer.localDescription.sdp })
+    const sdp = peer.localDescription.sdp
+    // Offre signée par la clé de ce contrôleur (phase 4) : l'agent la vérifie avant de répondre. Sans clé disponible, elle part sans signature.
+    const signature = request.sign ? await request.sign(sessionId, sdp).catch(() => null) : null
+    await request.post('/signaling/offer', signature ? { session_id: sessionId, sdp, signature } : { session_id: sessionId, sdp })
     offerSent = true
     queued.splice(0).forEach(sendIce)
 
@@ -176,6 +179,11 @@ export async function openSession({
       next = view.next
       pending.push(...view.ice)
       if (view.answer && !answered) {
+        // Point 2 : la réponse doit être signée par la clé ÉPINGLÉE de cet appareil, sur cette offre. Le serveur ne peut pas la remplacer.
+        const genuine = request.verifyAnswer
+          ? await request.verifyAnswer(deviceId, sessionId, sdp, view.answer, view.answer_signature || '').catch(() => false)
+          : false
+        if (!genuine) throw new Error('La réponse de l\'appareil n\'est pas signée par sa clé enregistrée : connexion refusée.')
         await peer.setRemoteDescription({ type: 'answer', sdp: view.answer })
         answered = true
       }

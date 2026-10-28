@@ -30,9 +30,11 @@ pub struct IceServerConfig {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMessage {
     Challenge { nonce: String },
-    Ready { #[serde(default)] ice_servers: Vec<IceServerConfig> },
+    /// `controller_pending` : clé publique d'un contrôleur qui attend d'être reconnue (phase 3b), absente tant qu'il n'y en a pas.
+    Ready { #[serde(default)] ice_servers: Vec<IceServerConfig>, #[serde(default)] controller_pending: Option<String> },
     OpenSession { session_id: String, permissions: Vec<String>, #[serde(default)] ice_servers: Vec<IceServerConfig> },
-    Offer { session_id: String, sdp: String },
+    /// `signature` : signature du contrôleur sur son offre (facultative jusqu'à la phase 6 de docs/SIGNATURE_CONTROLEUR.md).
+    Offer { session_id: String, sdp: String, #[serde(default)] signature: Option<String> },
     Ice { session_id: String, candidate: String },
     Reconnect { session_id: String },
     CloseSession { session_id: String },
@@ -52,6 +54,8 @@ pub enum ClientMessage {
     Bye { session_id: String },
     /// L'agent revient après une coupure du WebSocket et sa session WebRTC est toujours vivante : on la reprend sans renégocier.
     Resume { session_id: String },
+    /// Décision de la personne sur le contrôleur en attente : `accepted` = clé retenue par l'agent.
+    ControllerDecision { accepted: bool },
     Ping,
 }
 
@@ -76,7 +80,17 @@ struct Registered {
 }
 
 /// Annonce l'appareil (demande SIGNÉE : preuve de possession de la clé privée, anti-rejeu par horodatage et nonce) et renvoie le code à saisir.
+/// Défense en profondeur : la clé d'API ne part jamais vers un serveur non sûr (http hors réseau local, ou schéma inconnu), même si l'appelant
+/// a oublié de normaliser l'adresse. Même règle que config::normalize_server.
+fn ensure_safe_server(server: &str) -> Result<()> {
+    match crate::config::normalize_server(server) {
+        Some(normalized) if normalized == server.trim().trim_end_matches('/') => Ok(()),
+        _ => bail!("adresse de serveur refusée (https, ou http sur le réseau local seulement)"),
+    }
+}
+
 pub async fn register(server: &str, api_key: &str, config: &Config, identity: &Identity, platform: &str) -> Result<(String, u64)> {
+    ensure_safe_server(server)?;
     let mut raw = [0u8; 18];
     rand::rngs::OsRng.fill_bytes(&mut raw);
     let nonce = base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, raw);
@@ -108,6 +122,7 @@ pub async fn register(server: &str, api_key: &str, config: &Config, identity: &I
 }
 
 pub async fn connect(server: &str, api_key: &str, device_id: &str) -> Result<Socket> {
+    ensure_safe_server(server)?;
     let mut request = websocket_url(server, device_id).into_client_request()?;
     request.headers_mut().insert("x-api-key", api_key.parse().context("clé d'API invalide")?);
     let attempt = match tokio::time::timeout(NETWORK_TIMEOUT, connect_async(request)).await {
@@ -162,7 +177,7 @@ mod tests {
         assert_eq!(open, ServerMessage::OpenSession { session_id: "sess_1".into(), permissions: vec!["view_screen".into()],
                    ice_servers: vec![IceServerConfig { urls: vec!["stun:s:3478".into()], username: None, credential: None }] });
         let ready: ServerMessage = serde_json::from_str(r#"{"type":"ready"}"#).unwrap();
-        assert_eq!(ready, ServerMessage::Ready { ice_servers: vec![] });
+        assert_eq!(ready, ServerMessage::Ready { ice_servers: vec![], controller_pending: None });
         assert!(serde_json::from_str::<ServerMessage>(r#"{"type":"inconnu"}"#).is_err());
     }
 
@@ -175,5 +190,20 @@ mod tests {
         // le type de machine n'est envoyé que s'il est connu : un ancien serveur reçoit exactement le message d'avant
         assert!(serde_json::to_value(ClientMessage::Grant { permissions: vec![], platform: String::new() }).unwrap().get("platform").is_none());
         assert_eq!(serde_json::to_value(ClientMessage::Grant { permissions: vec![], platform: "windows-laptop".into() }).unwrap()["platform"], "windows-laptop");
+    }
+}
+
+#[cfg(test)]
+mod safety_tests {
+    use super::ensure_safe_server;
+
+    #[test]
+    fn the_api_key_only_travels_to_https_or_to_the_local_network_over_http() {
+        assert!(ensure_safe_server("https://rendezvous.exemple.fr").is_ok());
+        assert!(ensure_safe_server("http://192.168.1.20:8000").is_ok());
+        assert!(ensure_safe_server("http://127.0.0.1:8000").is_ok());
+        assert!(ensure_safe_server("http://attaquant.exemple").is_err(), "http vers Internet : la clé partirait en clair");
+        assert!(ensure_safe_server("ftp://192.168.1.20").is_err());
+        assert!(ensure_safe_server("").is_err());
     }
 }

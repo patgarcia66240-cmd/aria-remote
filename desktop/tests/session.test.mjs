@@ -192,6 +192,7 @@ function fakePeer(log) {
 function backend({ answer = 'v=0 answer', state = 'CONNECTING' } = {}) {
   const log = []
   const request = {
+    verifyAnswer: async () => true,
     post: async (path, body) => { log.push([path, body]); return { session_id: 'sess_test', state: 'CONNECTING' } },
     api: async (path, options) => {
       log.push([path, options?.method || 'GET'])
@@ -313,5 +314,51 @@ describe('openSession', () => {
     await drop()
     assert.equal(states.at(-1), 'lost')
     assert.equal(peers.length, 4)
+  })
+})
+
+describe('signature des offres du contrôleur (phase 4)', () => {
+  it('createRequest.sign appelle controller_sign_offer avec la session et le SDP', async () => {
+    const invoke = mock.fn(async () => 'SIGNATURE')
+    const request = createRequest(invoke)
+    assert.equal(await request.sign('sess_1', 'v=0 offre'), 'SIGNATURE')
+    assert.deepEqual(invoke.mock.calls.map((c) => c.arguments), [['controller_sign_offer', { sessionId: 'sess_1', sdp: 'v=0 offre' }]])
+  })
+
+  it('l\'offre part avec sa signature quand le bureau sait signer', async () => {
+    const { request, log } = backend()
+    const signed = { ...request, sign: async (sessionId, sdp) => `sig:${sessionId}:${sdp.length}` }
+    await openSession({ ...base, request: signed, makePeer: () => fakePeer(log) })
+    const offer = log.find(([path]) => path === '/signaling/offer')
+    assert.deepEqual(offer[1], { session_id: 'sess_test', sdp: 'v=0 offer', signature: 'sig:sess_test:9' })
+  })
+
+  it('si la signature échoue, l\'offre part sans champ signature (l\'agent décidera, phase 6)', async () => {
+    const { request, log } = backend()
+    const failing = { ...request, sign: async () => { throw new Error('clé indisponible') } }
+    await openSession({ ...base, request: failing, makePeer: () => fakePeer(log) })
+    const offer = log.find(([path]) => path === '/signaling/offer')
+    assert.deepEqual(offer[1], { session_id: 'sess_test', sdp: 'v=0 offer' })
+  })
+})
+
+
+describe('réponse de l\'agent vérifiée avec la clé épinglée (point 2)', () => {
+  it('une réponse que le contrôleur ne peut pas vérifier est refusée : aucune connexion', async () => {
+    const { request, log } = backend()
+    const unverifiable = { ...request, verifyAnswer: async () => false }
+    const peers = []
+    await assert.rejects(openSession({ ...base, request: unverifiable, makePeer: (config) => { const peer = fakePeer(log); peers.push(peer); return peer } }), /pas signée/)
+    assert.equal(peers.length, 1)
+    assert.equal(peers[0].remote, null, 'la réponse n\'est jamais appliquée')
+  })
+
+  it('la vérification reçoit l\'appareil, la session, l\'offre exacte, la réponse et sa signature', async () => {
+    const { request, log } = backend({ answer: 'v=0 answer' })
+    const calls = []
+    const spy = { ...request, api: async (path, options) => (path.includes('/signaling') ? { state: 'CONNECTING', answer: 'v=0 answer', answer_signature: 'SIG', ice: [], next: 1 } : request.api(path, options)),
+      verifyAnswer: async (...args) => { calls.push(args); return true } }
+    await openSession({ ...base, request: spy, makePeer: () => fakePeer(log) }).catch(() => {})
+    assert.deepEqual(calls[0], ['dev_bureau_0001', 'sess_test', 'v=0 offer', 'v=0 answer', 'SIG'])
   })
 })
