@@ -75,6 +75,18 @@ pub fn answer_is_signed(device_key: &str, session_id: &str, offer: &str, answer:
     verify_with(device_key, &answer_message(session_id, offer, answer), signature)
 }
 
+/// Phase 6 : décision sur une offre entrante. Refusée sans signature valide de la clé du contrôleur accepté à l'appairage.
+/// Sans clé acceptée (appairage ancien ou refusé), l'agent ne peut rien vérifier : il refuse aussi.
+pub fn controller_offer_decision(controller_key: Option<&str>, session_id: &str, offer: &str, signature: Option<&str>) -> Result<(), &'static str> {
+    let Some(key) = controller_key else { return Err("clé du contrôleur inconnue : appairer à nouveau depuis le contrôleur") };
+    let Some(signature) = signature else { return Err("offre non signée") };
+    if controller_offer_is_signed(key, session_id, offer, signature) {
+        Ok(())
+    } else {
+        Err("signature du contrôleur invalide")
+    }
+}
+
 fn verify_with(public_key: &str, message: &[u8], signature: &str) -> bool {
     let (Ok(key_bytes), Ok(sig_bytes)) = (STANDARD.decode(public_key.trim()), STANDARD.decode(signature.trim())) else { return false };
     let (Ok(key), Ok(sig)) = (key_bytes.try_into().map(|b: [u8; 32]| b), ed25519_dalek::Signature::from_slice(&sig_bytes)) else { return false };
@@ -159,5 +171,21 @@ mod tests {
         assert_eq!(fp, fingerprint(&identity.public_key()).unwrap());
         assert_eq!(fp.len(), 19);
         assert!(fingerprint("pas-du-base64!").is_err());
+    }
+
+    #[test]
+    fn strict_mode_refuses_every_offer_that_is_not_signed_by_the_accepted_controller() {
+        let controller = Identity::generate();
+        let intruder = Identity::generate();
+        let offer = "v=0 offre";
+        let good = controller.sign(&controller_offer_message("sess_1", offer));
+        let key = controller.public_key();
+        assert_eq!(controller_offer_decision(Some(&key), "sess_1", offer, Some(&good)), Ok(()));
+        assert!(controller_offer_decision(None, "sess_1", offer, Some(&good)).is_err(), "pas de clé acceptée");
+        assert!(controller_offer_decision(Some(&key), "sess_1", offer, None).is_err(), "offre non signée");
+        assert!(controller_offer_decision(Some(&key), "sess_1", "v=0 autre", Some(&good)).is_err(), "offre modifiée");
+        assert!(controller_offer_decision(Some(&key), "sess_2", offer, Some(&good)).is_err(), "rejouée");
+        let forged = intruder.sign(&controller_offer_message("sess_1", offer));
+        assert!(controller_offer_decision(Some(&key), "sess_1", offer, Some(&forged)).is_err(), "signée par une autre clé");
     }
 }

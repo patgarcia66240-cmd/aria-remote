@@ -432,7 +432,9 @@ impl Agent {
         match message {
             ServerMessage::OpenSession { session_id, permissions, ice_servers } => self.on_open_session(session_id, permissions, ice_servers, out, events),
             ServerMessage::Offer { session_id, sdp, signature } => {
-                self.check_controller_offer(&session_id, &sdp, signature.as_deref());
+                if !self.check_controller_offer(&session_id, &sdp, signature.as_deref()) {
+                    return;
+                }
                 if let Err(error) = self.on_offer(&session_id, sdp, out).await {
                     self.log(format!("négociation impossible : {error:#}"));
                 }
@@ -569,16 +571,19 @@ impl Agent {
         false
     }
 
-    /// Phase 2 (journalisation seule) : contrôle la signature du contrôleur sur l'offre et le consigne. NE REFUSE RIEN encore : le refus
-    /// viendra en phase 6, une fois tous les contrôleurs signés.
-    fn check_controller_offer(&mut self, session_id: &str, sdp: &str, signature: Option<&str>) {
-        let verdict = match (self.config.controller_key.as_deref(), signature) {
-            (None, _) => "clé du contrôleur inconnue : non vérifiable",
-            (Some(_), None) => "offre NON SIGNÉE",
-            (Some(key), Some(sig)) if identity::controller_offer_is_signed(key, session_id, sdp, sig) => "signature du contrôleur valide",
-            (Some(_), Some(_)) => "signature du contrôleur INVALIDE",
-        };
-        self.log(format!("session {session_id} : {verdict} (journalisation seule)"));
+    /// Phase 6 (refus strict) : une offre n'est négociée que si elle est signée par le contrôleur accepté à l'appairage.
+    /// Renvoie false (et le consigne) pour une offre refusée.
+    fn check_controller_offer(&mut self, session_id: &str, sdp: &str, signature: Option<&str>) -> bool {
+        match identity::controller_offer_decision(self.config.controller_key.as_deref(), session_id, sdp, signature) {
+            Ok(()) => {
+                self.log(format!("session {session_id} : offre signée par le contrôleur accepté"));
+                true
+            }
+            Err(reason) => {
+                self.log(format!("session {session_id} : offre REFUSÉE ({reason})"));
+                false
+            }
+        }
     }
 
     async fn on_offer(&mut self, session_id: &str, sdp: String, out: &Out) -> Result<()> {

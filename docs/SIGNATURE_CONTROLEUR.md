@@ -37,7 +37,8 @@ Aucune offre n'est acceptée par l'agent sans signature valide d'une clé de con
 3. **Phase 3** : serveur et plugin — relais de la clé publique et de la signature, tests d'appairage étendu.
 4. **Phase 4 (faite)** : bureau — `desktop/src/controller_key.rs` génère la clé au premier usage (fichier `controller.seed` dans le dossier de configuration, lecture refusée si erreur autre que « absent » pour ne jamais écraser une clé), commandes `controller_identity` et `controller_sign_offer`, offres signées dans `session.js` (sans signature si la signature échoue, en attendant la phase 6), clé publique envoyée à `/pair` et empreinte affichée dans le formulaire d'appairage. Tests : `npm test` (51 verts) ; tests Rust (`cargo test`) à lancer par la CI Windows.
 5. **Phase 5 (faite)** : onglet ARIA — `ui/src/controllerKey.js` crée une clé Ed25519 WebCrypto non extractible, rangée dans IndexedDB ; l'appairage envoie la clé publique et affiche l'empreinte ; les offres sont signées. Sans WebCrypto Ed25519 (navigateur ancien), l'appairage est refusé avec un message explicite. Vérifiée sous Node (signatures acceptées par la vérification Ed25519 indépendante, empreinte conforme à l'agent) ; les tests Vitest de `ui/` ne tournent pas dans ce dépôt (chemins d'import obsolètes, pas de `package.json`).
-6. **Phase 6** : passage en mode strict (refus des offres non signées) une fois les contrôleurs à jour.
+6. **Phase 6 (faite dans la branche, non déployée)** : refus strict. `identity::controller_offer_decision` refuse toute offre sans signature valide du contrôleur accepté, et refuse aussi sans clé acceptée. Décision testée (80 tests agent verts).
+   **Ordre de déploiement impératif** : 1) serveur, 2) bureau et onglet ARIA (qui signent et épinglent), 3) agents. Un agent strict refuse les contrôleurs qui ne signent pas : les mettre à jour après les contrôleurs.
 
 ## Compatibilité
 Le mode « journalisation seule » de la phase 2 permet de déployer l'agent avant les contrôleurs, sans couper les sessions existantes.
@@ -59,3 +60,7 @@ Le mode « journalisation seule » de la phase 2 permet de déployer l'agent ava
 - Limite : sans l'étape de comparaison d'empreinte à l'appairage, la confiance revient au serveur à ce moment-là.
 - Implémentation : serveur (`answer_signature`, clé donnée à `/pair`), agent (`identity::answer_is_signed`), bureau (`pin_device`, `verify_answer`,
   registre `pinned-devices.json`), onglet ARIA (`pinDevice`, `verifyAnswer` dans `ui/src/controllerKey.js`).
+
+## Tests phase 6
+- Agent : une offre non signée, signée par une autre clé, modifiée, rejouée ou sans clé acceptée est refusée (`strict_mode_refuses_every_offer_that_is_not_signed_by_the_accepted_controller`).
+- Limite : un contrôleur qui ne peut pas signer (navigateur sans Ed25519, clé absente) voit la négociation échouer après le délai, et l'agent journalise la raison.
