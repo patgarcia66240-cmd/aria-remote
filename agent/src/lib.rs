@@ -12,6 +12,7 @@ pub mod clipboard;
 pub mod config;
 pub mod identity;
 pub mod input;
+pub mod journal;
 mod instance;
 pub mod network;
 pub mod pipeline;

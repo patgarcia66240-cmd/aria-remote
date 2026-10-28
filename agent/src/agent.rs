@@ -274,6 +274,7 @@ impl Agent {
         let (out, mut outgoing) = mpsc::unbounded_channel::<ClientMessage>();
         let _ = out.send(self.grant_message());
         println!("[agent] connecté à PC Assistant — « stop » coupe la session en cours, « quit » arrête l'agent.");
+        crate::journal::log("signalisation : connecté au serveur");
         self.pairing_until = None;
         self.ui(|s| {
             s.pairing_code = None;
@@ -296,7 +297,10 @@ impl Agent {
             tokio::select! {
                 message = signaling::receive(&mut socket) => match message {
                     None => return Ok(Outcome::Closed),
-                    Some(Err(error)) => eprintln!("[agent] {error:#}"),
+                    Some(Err(error)) => {
+                        eprintln!("[agent] {error:#}");
+                        crate::journal::log(&format!("signalisation : erreur {error:#}"));
+                    }
                     Some(Ok(message)) => self.on_server(message, &out, &events_tx).await,
                 },
                 Some(message) = outgoing.recv() => signaling::send(&mut socket, &message).await?,

@@ -85,6 +85,7 @@ impl Peer {
         }));
         pc.on_peer_connection_state_change(Box::new(move |state| {
             eprintln!("[webrtc] état : {state}");
+            crate::journal::log(&format!("webrtc : état {state}"));
             on_state(state);
             Box::pin(async {})
         }));

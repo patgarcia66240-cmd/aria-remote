@@ -283,6 +283,7 @@ fn attach_control(channel: Arc<RTCDataChannel>, session: Arc<Session>) {
             for value in replies {
                 if value["t"] == "denied" {
                     eprintln!("[session] commande refusée : {}", value["reason"]);
+                    crate::journal::log(&format!("session : commande refusée ({})", value["reason"]));
                 }
                 let _ = reply.send_text(value.to_string()).await;
             }
@@ -339,6 +340,7 @@ fn start_frames(channel: Arc<RTCDataChannel>, session: Arc<Session>) {
                 Ok(screen) => screen,
                 Err(error) => {
                     eprintln!("[capture] écran indisponible : {error:#}");
+                    crate::journal::log(&format!("capture : écran indisponible {error:#}"));
                     raw.close();
                     return;
                 }
