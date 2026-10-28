@@ -802,3 +802,13 @@ def test_the_signed_answer_is_kept_and_returned_to_the_controller_for_verificati
     view = remote.service.signaling_view(session.session_id)
     assert view["answer"] == "v=0 answer"
     assert view["answer_signature"] == signature
+
+
+def test_the_pairing_response_gives_the_controller_the_device_key_to_pin(client):
+    """Point 2 : à l'appairage seulement, le contrôleur reçoit la clé publique de l'appareil pour l'épingler
+    (la liste des appareils ne donne que son empreinte)."""
+    agent = Agent()
+    code = client.post("/api/remote/devices/register", json=agent.register_args()).json()["pairing_code"]
+    paired = client.post("/api/remote/pair", json={"code": code}).json()["device"]
+    assert paired["public_key"] == agent.public_key
+    assert "public_key" not in client.get("/api/remote/devices").json()["devices"][0]

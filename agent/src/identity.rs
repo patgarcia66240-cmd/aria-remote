@@ -66,10 +66,38 @@ pub fn fingerprint(public_key: &str) -> Result<String> {
 
 /// Vérifie qu'une offre a été signée par la clé du contrôleur acceptée à l'appairage. Renvoie false si la clé ou la signature est invalide.
 pub fn controller_offer_is_signed(controller_key: &str, session_id: &str, offer: &str, signature: &str) -> bool {
-    let (Ok(key_bytes), Ok(sig_bytes)) = (STANDARD.decode(controller_key.trim()), STANDARD.decode(signature.trim())) else { return false };
+    verify_with(controller_key, &controller_offer_message(session_id, offer), signature)
+}
+
+/// Vérifie la réponse de l'agent (même message que `answer_message`) avec la clé publique de l'appareil ÉPINGLÉE par le contrôleur.
+/// Le contrôleur s'en sert pour refuser une réponse que le serveur aurait pu modifier (point 2 de l'audit).
+pub fn answer_is_signed(device_key: &str, session_id: &str, offer: &str, answer: &str, signature: &str) -> bool {
+    verify_with(device_key, &answer_message(session_id, offer, answer), signature)
+}
+
+fn verify_with(public_key: &str, message: &[u8], signature: &str) -> bool {
+    let (Ok(key_bytes), Ok(sig_bytes)) = (STANDARD.decode(public_key.trim()), STANDARD.decode(signature.trim())) else { return false };
     let (Ok(key), Ok(sig)) = (key_bytes.try_into().map(|b: [u8; 32]| b), ed25519_dalek::Signature::from_slice(&sig_bytes)) else { return false };
     let Ok(verifying) = ed25519_dalek::VerifyingKey::from_bytes(&key) else { return false };
-    verifying.verify_strict(&controller_offer_message(session_id, offer), &sig).is_ok()
+    verifying.verify_strict(message, &sig).is_ok()
+}
+
+#[cfg(test)]
+mod answer_tests {
+    use super::*;
+
+    #[test]
+    fn an_answer_is_accepted_only_with_the_pinned_device_key_and_the_exact_content() {
+        let device = Identity::generate();
+        let other = Identity::generate();
+        let (offer, answer) = ("v=0 offre", "v=0 reponse");
+        let signature = device.sign(&answer_message("sess_1", offer, answer));
+        assert!(answer_is_signed(&device.public_key(), "sess_1", offer, answer, &signature));
+        assert!(!answer_is_signed(&other.public_key(), "sess_1", offer, answer, &signature), "autre appareil");
+        assert!(!answer_is_signed(&device.public_key(), "sess_1", offer, "v=0 reponse modifiee", &signature), "réponse modifiée par le serveur");
+        assert!(!answer_is_signed(&device.public_key(), "sess_2", offer, answer, &signature), "rejouée sur une autre session");
+        assert!(!answer_is_signed(&device.public_key(), "sess_1", offer, answer, ""), "pas de signature");
+    }
 }
 
 pub fn agent_auth_message(device_id: &str, nonce: &str) -> Vec<u8> {

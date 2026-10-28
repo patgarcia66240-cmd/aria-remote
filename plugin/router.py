@@ -83,7 +83,9 @@ async def register_device(body: RegisterBody) -> dict:
 
 @pairing_router.post("/pair")
 async def pair(body: PairBody) -> dict:
-    return {"device": service.pair(body.code, body.controller_key).to_dict()}
+    # La clé publique de l'appareil n'est remise qu'ici, à l'appairage : le contrôleur l'épingle pour vérifier les réponses de l'agent (point 2).
+    device = service.pair(body.code, body.controller_key)
+    return {"device": {**device.to_dict(), "public_key": device.public_key}}
 
 
 @router.get("/devices")
