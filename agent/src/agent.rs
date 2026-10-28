@@ -48,6 +48,8 @@ struct Active {
     session_id: String,
     plan: Plan,
     peer: Option<Peer>,
+    /// Session partagée par les canaux : on la réduit tout de suite si la personne retire un droit.
+    session: Option<Arc<Session>>,
 }
 
 enum Event {
@@ -328,6 +330,13 @@ impl Agent {
                 if mouse { allow.insert(Permission::ControlMouse); }
                 if keyboard { allow.insert(Permission::ControlKeyboard); }
                 self.options.allow = allow;
+                // La session en cours suit le réglage : un droit retiré cesse d'agir immédiatement, pas seulement pour la prochaine session.
+                if let Some(active) = self.active.as_mut() {
+                    active.plan.permissions.retain(|p| self.options.allow.contains(p));
+                    if let Some(session) = &active.session {
+                        session.restrict(&self.options.allow);
+                    }
+                }
                 let saved: Vec<&str> = [(mouse, "mouse"), (keyboard, "keyboard")].into_iter().filter(|(on, _)| *on).map(|(_, name)| name).collect();
                 self.config.allow = Some(saved.join(","));
                 self.save_config();
@@ -528,7 +537,7 @@ impl Agent {
                 let Some(plan) = self.requests.remove(session_id).filter(|plan| plan.accepted) else {
                     bail!("offre reçue pour une session non acceptée ({session_id})");
                 };
-                Active { session_id: session_id.to_string(), plan, peer: None }
+                Active { session_id: session_id.to_string(), plan, peer: None, session: None }
             }
         };
         if let Some(old) = active.peer.take() {
@@ -540,6 +549,7 @@ impl Agent {
         // Une seule session partagée par les deux canaux (« frames » et « control ») : mêmes droits, mêmes réglages d'image, même écran.
         let clipboard: SharedClipboard = Arc::new(Mutex::new(Box::new(SystemClipboard)));
         let session = Session::new((*permissions).clone(), input, self.options.screens.clone(), clipboard);
+        let handle = session.clone();
         let on_channel: Arc<dyn Fn(Arc<webrtc::data_channel::RTCDataChannel>) + Send + Sync> =
             Arc::new(move |channel| attach_channel(channel, session.clone()));
         let ui = self.options.ui.clone();
@@ -571,6 +581,7 @@ impl Agent {
             state: "connecting".into(),
         };
         active.peer = Some(peer);
+        active.session = Some(handle);
         self.active = Some(active);
         self.ui(move |s| s.session = Some(info));
         ui::minimize_window(true);
