@@ -1,6 +1,6 @@
 # Chantier H.264 : envoyer l'écran comme une vidéo
 
-Statut : préparation ; étapes 1 à 3 faites côté agent (voir les sections « Résultats ... »), contrôleurs (étape 4) pas commencés. Rien d'implémenté dans l'agent. Point de départ : agent 1.12.0, desktop 0.5.2.
+Statut : préparation ; étapes 1 à 3 faites côté agent, étape 4 faite pour le contrôleur de bureau seulement (voir les sections « Résultats ... ») ; contrôleur ARIA (`ui/`) pas commencé. Rien d'implémenté dans l'agent. Point de départ : agent 1.12.0, desktop 0.5.2.
 
 ## Objectif
 
@@ -117,6 +117,25 @@ Limites et reste à faire :
 - Le test de compilation hors Windows n'a pas pu être fait (aucune cible Linux installée ici) : à laisser passer par la CI.
 - Encodeur logiciel seulement ; l'encodeur matériel de Media Foundation (asynchrone) n'est pas utilisé.
 - Pas de changement de version de l'agent ni de publication.
+
+## Résultats de l'étape 4 : contrôleur de bureau (25 nov. 2026, branche `feat/h264-desktop`)
+
+Livré dans `desktop/web` (WebView2), rien dans `ui/` (onglet ARIA) :
+- `video.js` : `h264Codecs` (codecs H.264 en paquétisation 1 que le navigateur décode), `canShowVideo` (décodage ET `requestVideoFrameCallback`), `showVideo` (une `<video>` invisible décode le flux, chaque image est recopiée dans le MÊME `<canvas>` que le JPEG : souris, curseur distant et capture PNG ne changent pas), `videoStalled`.
+- `session.js` : `openSession({ videoCodecs, onVideo })` ajoute une piste vidéo en réception seule, limitée à ces codecs, à l'offre (donc signée avec le reste). Sans codecs, l'offre est inchangée.
+- `app.js` : demande la vidéo si le navigateur sait l'afficher et que la préférence `aria-remote-video` n'est pas `off` ; passe en « H.264 » quand `info.features` contient `h264` ou que l'agent annonce `codec` ; garde-fou : 5 s sans image alors qu'on est en H.264 = `codec{jpeg}` envoyé à l'agent, retour au JPEG pour toute la session et message à l'utilisateur ; le garde-fou ne compte pas quand la page est cachée (fenêtre réduite : le navigateur ne dessine plus).
+- `tools.js` : l'infobulle de la pastille de latence indique « vidéo H.264 » ou « images JPEG » (rien de changé avec un agent sans H.264).
+
+Vérifié :
+- 65 tests de `desktop` verts (53 avant), dont la négociation avec un faux pair (offre inchangée sans codecs ; piste vidéo en réception seule avec codecs ; flux transmis ; piste périmée ignorée) et `video.js` avec un faux DOM.
+- Page de contrôle servie par la sonde (`/canvas`) avec LA MÊME politique de sécurité (CSP) que la fenêtre Tauri : vraie vidéo H.264 de `webrtc-rs` -> `showVideo` -> canvas 1600x900 à 9,3 images/s pour 10 envoyées, pixels non noirs, aucune erreur de CSP (la CSP n'a donc pas besoin de changer). La vraie offre de Chromium passe le test `offer_wants_h264` de l'agent.
+- Piège rencontré : un onglet en arrière-plan ne dessine que ~1 image/s (`requestAnimationFrame` et `requestVideoFrameCallback` sont ralentis, alors que le décodage tourne à 9 images/s sans perte). D'où le garde-fou qui ignore les pages cachées.
+
+Limites :
+- Pas testé dans la vraie fenêtre Tauri/WebView2 de bout en bout (agent + serveur + appairage) : seulement dans Chromium avec la CSP de Tauri. À faire avant publication.
+- La signature de l'offre avec `m=video` n'a pas été exercée avec la vraie chaîne (serveur + clés) ; elle couvre le SDP entier, donc la vidéo est couverte comme le reste.
+- Contrôleur ARIA (`ui/`) : pas fait (ses tests Vitest ne tournent pas dans ce dépôt) ; il reste en JPEG.
+- Pas de réglage visible pour forcer le JPEG (seulement la préférence `aria-remote-video`), pas de changement de version ni de publication.
 
 ## Mesures à faire AVANT de se lancer
 

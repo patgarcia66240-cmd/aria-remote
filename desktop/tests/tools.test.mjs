@@ -68,6 +68,9 @@ describe('infobulle des statistiques', () => {
     assert.ok(statsTitle({ rtt: 42, agent: { ...agent, dropped: 1 } }).includes('1 abandonnée ('))
     assert.ok(statsTitle({ rtt: 42, agent: { ...agent, dropped: 4 } }).includes('4 abandonnées'))
     assert.ok(statsTitle({ rtt: 42, agent: { ...agent, idle: true, fps: 0 } }).includes('écran fixe'))
+    assert.equal(statsTitle({ rtt: 42, agent: null, codec: 'h264' }), 'latence 42 ms · vidéo H.264')
+    assert.equal(statsTitle({ rtt: 42, agent: null, codec: 'jpeg' }), 'latence 42 ms · images JPEG')
+    assert.equal(statsTitle({ rtt: 42, agent: null, codec: null }), 'latence 42 ms', 'agent sans H.264 : le titre est inchangé')
   })
 })
 

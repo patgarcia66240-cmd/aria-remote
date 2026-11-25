@@ -174,6 +174,8 @@ function fakePeer(log) {
     localDescription: null,
     channels: [],
     closed: 0,
+    transceivers: [],
+    addTransceiver: (kind, init) => { const transceiver = { kind, init, preferences: null, setCodecPreferences: (codecs) => { transceiver.preferences = codecs } }; peer.transceivers.push(transceiver); return transceiver },
     createDataChannel: (label, options) => { const channel = { label, options, readyState: 'open', sent: [], send: (data) => channel.sent.push(data) }; peer.channels.push(channel); return channel },
     createOffer: async () => ({ type: 'offer', sdp: 'v=0 offer' }),
     setLocalDescription: async (description) => {
@@ -207,6 +209,37 @@ function backend({ answer = 'v=0 answer', state = 'CONNECTING' } = {}) {
 const base = { deviceId: 'dev_bureau_0001', permissions: ['view_screen'], sleep: async () => {} }
 
 describe('openSession', () => {
+  it("sans codec vidéo, l'offre reste celle d'avant : aucune piste vidéo demandée", async () => {
+    const { request, log } = backend()
+    let peer
+    await openSession({ ...base, request, makePeer: () => { peer = fakePeer(log); return peer } })
+    assert.deepEqual(peer.transceivers, [])
+    assert.equal(peer.ontrack, undefined)
+  })
+
+  it("avec des codecs H.264, l'offre demande une piste vidéo en réception seule limitée à ces codecs, et le flux reçu est transmis", async () => {
+    const { request, log } = backend()
+    const codecs = [{ mimeType: 'video/H264', sdpFmtpLine: 'packetization-mode=1' }]
+    const streams = []
+    let peer
+    await openSession({ ...base, request, videoCodecs: codecs, onVideo: (stream) => streams.push(stream), makePeer: () => { peer = fakePeer(log); return peer } })
+    assert.equal(peer.transceivers.length, 1)
+    assert.deepEqual([peer.transceivers[0].kind, peer.transceivers[0].init], ['video', { direction: 'recvonly' }])
+    assert.deepEqual(peer.transceivers[0].preferences, codecs)
+    peer.ontrack({ streams: [{ id: 'flux-1' }], track: {} })
+    assert.deepEqual(streams, [{ id: 'flux-1' }])
+  })
+
+  it("une piste d'une négociation périmée est ignorée (reconnexion)", async () => {
+    const { request, log } = backend()
+    const streams = []
+    const peers = []
+    const link = await openSession({ ...base, request, videoCodecs: [{ mimeType: 'video/H264', sdpFmtpLine: 'packetization-mode=1' }], onVideo: (s) => streams.push(s), makePeer: () => { const p = fakePeer(log); peers.push(p); return p } })
+    await link.close()
+    peers[0].ontrack({ streams: [{ id: 'tardif' }], track: {} })
+    assert.deepEqual(streams, [], "la session est fermée : plus rien n'est transmis")
+  })
+
   it('attend l\'acceptation, envoie l\'offre AVANT les candidats, applique la réponse puis se connecte', async () => {
     const { request, log } = backend()
     const peers = []
