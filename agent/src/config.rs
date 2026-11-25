@@ -71,7 +71,17 @@ pub fn save(path: &Path, config: &Config) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    std::fs::write(path, serde_json::to_string_pretty(config)?)?;
+    let data = serde_json::to_string_pretty(config)?;
+    #[cfg(unix)]
+    {
+        // Le fichier est créé directement en 0600 : les secrets ne sont jamais lisibles par les autres, même un instant.
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut file = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(path)?;
+        file.write_all(data.as_bytes())?;
+    }
+    #[cfg(not(unix))]
+    std::fs::write(path, data)?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
