@@ -38,6 +38,7 @@ tower = { version = "0.5", features = ["util"] }
 [target.'cfg(windows)'.dependencies]
 enigo = "0.6"
 rfd = "0.15"
+windows = { version = "0.61", features = ["Win32_Media_MediaFoundation", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Ole", "Win32_System_Variant"] }   # encodeur H.264 (Media Foundation)
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
 xcap = "0.9"
 

@@ -1,5 +1,6 @@
 //! Capture de l'écran : une source produit des images brutes RGBA, `screen::encode_jpeg` les compresse pour le canal « frames ».
 
+pub mod h264;
 pub mod screen;
 
 use std::sync::Arc;

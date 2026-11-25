@@ -3105,6 +3105,7 @@ dependencies = [
  "tokio-tungstenite",
  "tower",
  "webrtc",
+ "windows 0.61.3",
  "windows-sys 0.59.0",
  "winresource",
  "xcap",

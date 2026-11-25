@@ -1,6 +1,6 @@
 # Chantier H.264 : envoyer l'écran comme une vidéo
 
-Statut : préparation ; étapes 1 et 2 faites, voir « Résultats du banc d'essai » et « Résultats du prototype de transport ». Rien d'implémenté dans l'agent. Point de départ : agent 1.12.0, desktop 0.5.2.
+Statut : préparation ; étapes 1 à 3 faites côté agent (voir les sections « Résultats ... »), contrôleurs (étape 4) pas commencés. Rien d'implémenté dans l'agent. Point de départ : agent 1.12.0, desktop 0.5.2.
 
 ## Objectif
 
@@ -97,6 +97,26 @@ Constats :
 Limites : un seul passage de 30 s par cas, aucune tendance nette (le témoin gèle aussi) ; tout en local, pertes simulées côté émetteur ; pas de limite de débit, pas de latence de bout en bout, pas de NAT ni de relais ; navigateur intégré (Chromium), pas WebView2 du desktop.
 
 À faire ensuite (étape 3) : tester dans WebView2, mesurer la latence de bout en bout, passes plus longues et répétées, simulation d'un débit limité.
+
+## Résultats de l'étape 3 : encodeur et négociation côté agent (25 nov. 2026, branche `feat/h264-agent`)
+
+Livré dans l'agent (aucun contrôleur modifié) :
+- `capture/h264.rs` : encodeur H.264 Media Foundation (logiciel, Constrained Baseline, sans images B, débit constant, image clé à la demande, Annex B), conversion RGBA -> NV12 et réduction de la largeur. Mesure : ~17,5 ms par image en 1920x1080 -> 1600 px (réduction + conversion + encodage), du même ordre que le JPEG (~18 ms).
+- `network/webrtc.rs` : `offer_wants_h264` (l'offre contient du H.264 en paquétisation 1), piste vidéo `VideoOut`, lecture du RTCP du contrôleur (PLI/FIR = image clé demandée).
+- `session.rs` : l'écran part en H.264 sur la piste seulement si le contrôleur l'a demandé dans son offre ET que l'encodeur existe ; fonction `h264` ajoutée à `info` dans ce cas seulement ; message de contrôle `codec{name: "jpeg" | "h264"}` (repli ou retour) ; annonce `codec{name}` quand le codec change (aux contrôleurs récents seulement) ; repli automatique sur JPEG après 3 échecs d'encodage de suite ; débit de l'encodeur déduit du réglage « qualité » (`h264_kbps` : ~1,9 Mbit/s à 55).
+- Compatibilité : un contrôleur qui ne met pas de vidéo dans son offre ne voit AUCUN changement (JPEG par « frames », pas de « h264 » dans `info`). L'agent peut donc être déployé avant les contrôleurs.
+
+Découverte importante : par défaut l'encodeur de Windows garde ~16 images en réserve avant de sortir la première (1,6 s à 10 images/s). Il faut le mode faible latence ET le temps réel avec un VARIANT de type booléen (avec un entier, le réglage est ignoré sans erreur) ; un test l'impose maintenant (première sortie à l'entrée 0 ou 1).
+
+Tests : 92 tests de l'agent verts (80 avant). Dont deux tests de bout en bout dans un processus (vrai `Peer` d'agent + contrôleur écrit avec la même bibliothèque, vraie connexion WebRTC locale) : sans demande de vidéo, rien ne change et le JPEG continue ; avec demande, la vidéo RTP arrive, le JPEG se tait, le repli `codec jpeg` fait revenir le JPEG, puis `codec h264` ramène la vidéo. Vérifié que le test échoue quand on coupe la vidéo côté agent.
+
+Limites et reste à faire :
+- Aucun contrôleur (ARIA, bureau) ne demande encore la vidéo : étape 4.
+- Pas de pilotage dynamique du débit à partir du RTCP (perte, NACK) : le débit suit seulement le réglage « qualité » (étape 5).
+- La signature de l'offre couvre le SDP entier (SHA-256), donc une ligne `m=video` est signée comme le reste ; non vérifié ici avec la vraie chaîne de signature (serveur + clés), à tester à l'étape 4.
+- Le test de compilation hors Windows n'a pas pu être fait (aucune cible Linux installée ici) : à laisser passer par la CI.
+- Encodeur logiciel seulement ; l'encodeur matériel de Media Foundation (asynchrone) n'est pas utilisé.
+- Pas de changement de version de l'agent ni de publication.
 
 ## Mesures à faire AVANT de se lancer
 
