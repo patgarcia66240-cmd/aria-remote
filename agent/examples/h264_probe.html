@@ -1,0 +1,59 @@
+<!doctype html>
+<meta charset="utf-8"><title>Sonde H.264</title>
+<style>body{font:14px system-ui;margin:16px;background:#111;color:#ddd}video{width:640px;background:#000;display:block}pre{font-size:13px}</style>
+<video id="v" autoplay muted playsinline></video>
+<pre id="out">connexion…</pre>
+<script>
+(async () => {
+  const pc = new RTCPeerConnection()
+  const transceiver = pc.addTransceiver('video', { direction: 'recvonly' })
+  const codecs = RTCRtpReceiver.getCapabilities('video').codecs
+  const h264 = codecs.filter((c) => c.mimeType === 'video/H264')
+  window.__h264 = h264.length
+  if (h264.length) transceiver.setCodecPreferences(h264)
+  pc.ontrack = (e) => {
+    document.getElementById('v').srcObject = e.streams[0] || new MediaStream([e.track])
+    const jb = new URLSearchParams(location.search).get('jb')   // ?jb=0 : tampon de gigue minimal ; absent : réglage du navigateur
+    if (jb !== null && 'jitterBufferTarget' in e.receiver) e.receiver.jitterBufferTarget = Number(jb)
+  }
+  await pc.setLocalDescription(await pc.createOffer())
+  await new Promise((r) => { if (pc.iceGatheringState === 'complete') r(); else pc.onicegatheringstatechange = () => pc.iceGatheringState === 'complete' && r() })
+  const res = await fetch('/offer', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sdp: pc.localDescription.sdp }) })
+  if (!res.ok) { document.getElementById('out').textContent = 'erreur : ' + await res.text(); return }
+  await pc.setRemoteDescription({ type: 'answer', sdp: (await res.json()).sdp })
+  let prev = null
+  const started = performance.now()
+  setInterval(async () => {
+    const stats = await pc.getStats()
+    for (const s of stats.values()) {
+      if (s.type !== 'inbound-rtp' || s.kind !== 'video') continue
+      const now = { t: s.timestamp, bytes: s.bytesReceived, decoded: s.framesDecoded }
+      const dt = prev ? (now.t - prev.t) / 1000 : 0
+      const info = {
+        codec: stats.get(s.codecId)?.mimeType, h264_dispo: window.__h264,
+        decodees: s.framesDecoded, perdues_decodeur: s.framesDropped, recues: s.framesReceived,
+        paquets_perdus: s.packetsLost, nack_envoyes: s.nackCount, pli_envoyes: s.pliCount, fir_envoyes: s.firCount,
+        kbit_s: prev ? Math.round((now.bytes - prev.bytes) * 8 / dt / 1000) : 0,
+        images_s: prev ? +((now.decoded - prev.decoded) / dt).toFixed(1) : 0,
+        gel_total_ms: Math.round((s.totalFreezesDuration || 0) * 1000), gels: s.freezeCount || 0,
+        gigue_ms: Math.round((s.jitter || 0) * 1000),
+        tampon_ms: s.jitterBufferEmittedCount ? Math.round(s.jitterBufferDelay / s.jitterBufferEmittedCount * 1000) : null,
+        decodage_ms: s.framesDecoded ? +(s.totalDecodeTime / s.framesDecoded * 1000).toFixed(1) : null,
+        largeur: s.frameWidth, hauteur: s.frameHeight,
+      }
+      window.__stats = info
+      // Fenêtre de mesure : 15 s de chauffe (démarrage, première image clé), puis 30 s comptées en différences.
+      const age = (performance.now() - started) / 1000
+      const snap = { decodees: s.framesDecoded, gels: s.freezeCount || 0, gel_ms: Math.round((s.totalFreezesDuration || 0) * 1000), nack: s.nackCount, pli: s.pliCount, perdus: s.packetsLost, recues: s.packetsReceived }
+      if (age >= 15 && !window.__base) window.__base = snap
+      if (window.__base && age >= 45 && !window.__final) {
+        const b = window.__base
+        window.__final = { fenetre_s: 30, images_decodees: snap.decodees - b.decodees, gels: snap.gels - b.gels, gel_ms: snap.gel_ms - b.gel_ms, nack: snap.nack - b.nack, pli: snap.pli - b.pli, tampon_ms: info.tampon_ms, gigue_ms: info.gigue_ms }
+      }
+      info.mesure = window.__final || (window.__base ? 'en cours (' + Math.round(age) + ' s / 45 s)' : 'chauffe (' + Math.round(age) + ' s / 15 s)')
+      document.getElementById('out').textContent = JSON.stringify(info, null, 2)
+      prev = now
+    }
+  }, 1000)
+})()
+</script>
