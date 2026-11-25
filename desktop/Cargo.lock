@@ -170,7 +170,7 @@ dependencies = [
 
 [[package]]
 name = "aria-remote-desktop"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "arboard",
  "base64 0.22.1",
@@ -4488,7 +4488,7 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "remote-agent"
-version = "1.12.0"
+version = "1.13.0"
 dependencies = [
  "anyhow",
  "arboard",
@@ -4512,6 +4512,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "webrtc",
+ "windows 0.61.3",
  "windows-sys 0.59.0",
  "winresource",
  "xcap",

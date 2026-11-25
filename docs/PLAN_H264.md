@@ -1,6 +1,6 @@
 # Chantier H.264 : envoyer l'écran comme une vidéo
 
-Statut : préparation ; étapes 1 à 3 faites côté agent, étapes 4 et 5 faites pour le contrôleur de bureau seulement (voir les sections « Résultats ... ») ; contrôleur ARIA (`ui/`) pas commencé ; reste l'étape 6 (essai réel sur Internet, publication). Rien d'implémenté dans l'agent. Point de départ : agent 1.12.0, desktop 0.5.2.
+Statut : préparation ; étapes 1 à 3 faites côté agent, étapes 4 et 5 faites pour le contrôleur de bureau seulement (voir les sections « Résultats ... ») ; contrôleur ARIA (`ui/`) pas commencé ; étape 6 (essai réel sur Internet, publication) : préparée, à faire par une personne (voir « Étape 6 »). Point de départ : agent 1.12.0, desktop 0.5.2 ; versions préparées : agent 1.13.0, desktop 0.6.0.
 
 ## Objectif
 
@@ -156,6 +156,41 @@ Limites :
 - Les seuils (5 %, 1 %, 3 rapports, x0,85, +5 %) sont posés sans essai sur un vrai réseau : à régler à l'étape 6 avec des mesures réelles.
 - La perte simulée du test est une perte aléatoire à la réception sur la boucle locale, pas un vrai goulot (débit limité, file d'attente).
 - Pas de changement de version ni de publication ; contrôleur ARIA (`ui/`) toujours en JPEG.
+
+## Étape 6 : essai réel sur Internet et publication (protocole, à faire par une personne)
+
+Ce qui est préparé (branche `feat/h264-release`) : versions agent 1.13.0 et desktop 0.6.0 (`Cargo.toml`, `Cargo.lock`, `package.json`, `package-lock.json`, `tauri.conf.json`) ; les deux projets compilent avec `--locked`. Rien n'est fusionné, étiqueté ni publié.
+
+### Ce que les essais automatiques NE couvrent PAS
+Tout s'est fait en local (boucle locale, pertes simulées, navigateur de test). Il manque : un vrai réseau (NAT, relais TURN, goulot de débit, 4G), la vraie fenêtre Tauri/WebView2, la vraie chaîne de signature (serveur + clés épinglées), et la compilation hors Windows (la CI ne compile que sous Windows : voir `.github/workflows/build-agent.yml`, `build-desktop.yml`).
+
+### Matériel et construction
+- Deux appareils sur des réseaux DIFFÉRENTS : l'appareil contrôlé (agent) sur une box fixe, le contrôleur (bureau) sur un partage de connexion 4G, puis sur une autre box. Un goulot de débit montant (box ADSL, 4G faible) est le cas qui nous intéresse le plus.
+- Exécutables : lancer à la main « Agent Windows » et « Desktop Windows » (onglet Actions, Run workflow) SUR la branche d'essai : l'exe est gardé 30 jours comme artefact, sans étiquette ni publication. Ou, en local : `cargo build --release` dans `agent/`, `npm run tauri build` dans `desktop/`.
+- Le serveur doit être celui de production (ou de recette) avec appairage normal : c'est ce qui exerce la signature de l'offre avec `m=video`.
+
+### Plan de mesure
+Pour chaque réseau (fibre/Wi-Fi, 4G, réseau limité), et pour chaque combinaison JPEG (préférence `aria-remote-video` = `off`, ou agent 1.12.0) / H.264, aux préréglages Automatique, Économie, Équilibré, Haute qualité, pendant 3 minutes avec du défilement de page et de la frappe :
+1. Relever dans l'infobulle de la pastille de latence : latence, images/s, kb/s, capture ms, encodage ms, images abandonnées, débit demandé à l'encodeur (H.264).
+2. Noter : message « Qualité ajustée automatiquement » (combien de fois), message « La vidéo H.264 ne passe pas », gels visibles (durée), qualité de lecture du texte, délai ressenti de la frappe.
+3. Noter à chaque essai : codec affiché dans l'infobulle (« vidéo H.264 » ou « images JPEG »), version de l'agent et du bureau.
+
+| Réseau | Codec | Préréglage | Latence ms | Images/s | kb/s | Encodage ms | Abandonnées | Débit demandé | Gels | Remarques |
+|---|---|---|---|---|---|---|---|---|---|---|
+| | | | | | | | | | | |
+
+### Critères de réussite proposés (à confirmer avant l'essai)
+- H.264 utilise au plus le tiers du débit du JPEG à lisibilité de texte comparable, sur un lien montant limité.
+- Latence mesurée en H.264 pas plus de 30 ms au-dessus de celle du JPEG sur le même réseau.
+- Aucun message « La vidéo H.264 ne passe pas » en 10 minutes ; aucun gel de plus d'une seconde en 4G à l'Équilibré.
+- La qualité automatique se stabilise : au plus un changement de préréglage par minute une fois le réseau stable.
+- Si un critère échoue : relever les seuils du régulateur (`pipeline::RateControl`) et l'effet du tampon de gigue avant de conclure ; ne pas publier sans avoir compris pourquoi.
+
+### Publication (après essai concluant)
+1. Fusionner les PR dans l'ordre : #18, #19, #20, #21 (recibler chacune sur `main` après la précédente), puis la branche `feat/h264-release` : la CI Windows ne tourne que sur `main` (`paths: agent/**`) ou sur étiquette, aucune des PR empilées n'a donc été exécutée par la CI.
+2. Étiqueter `agent-v1.13.0` et `desktop-v0.6.0` : la CI exige que l'étiquette soit égale à la version de `Cargo.toml`.
+3. Ordre de déploiement : l'agent peut passer avant les contrôleurs (sans demande de vidéo il ne change rien) ; le bureau 0.6.0 avec un agent plus ancien reste en JPEG.
+4. Le contrôleur ARIA (`ui/`) reste en JPEG tant qu'il n'a pas son propre chantier.
 
 ## Mesures à faire AVANT de se lancer
 
