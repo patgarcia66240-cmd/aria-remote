@@ -6,27 +6,33 @@
 //!     ping{id}                    : mesure de latence (réponse pong{id}) ;
 //!     stream{fps?, quality?, width?} : réglages de l'image (vue de l'écran) ;
 //!     screen{index}               : écran à afficher et à piloter (vue de l'écran) ;
-//!     clip{text}                  : texte à mettre dans le presse-papiers de l'appareil (permission clavier).
+//!     clip{text}                  : texte à mettre dans le presse-papiers de l'appareil (permission clavier) ;
+//!     codec{name}                 : « jpeg » ou « h264 » (seulement si la vidéo H.264 a été négociée : fonction « h264 » de info).
 //!   agent -> contrôleur : info{width, height, permissions, screens, screen, features}, cursor{x, y}, pong{id}, clip{text}, denied{reason},
-//!     stats{fps, kbps, capture_ms, encode_ms, dropped, idle} toutes les 2 s (voir pipeline.rs).
+//!     stats{fps, kbps, capture_ms, encode_ms, dropped, idle} toutes les 2 s (voir pipeline.rs), codec{name} quand le codec en cours change.
+//! Écran en H.264 (docs/PLAN_H264.md) : si le contrôleur met de la vidéo H.264 dans son offre et que cette machine sait l'encoder, l'écran passe par
+//!   une piste vidéo WebRTC ; « frames » reste ouvert et sert de repli JPEG (demandé par codec{jpeg} ou imposé si l'encodeur échoue).
 //! Canaux : « frames » (images JPEG découpées, le contrôleur le crée non ordonné à fiabilité partielle : une image perdue ne retarde pas la suivante),
 //!   « control » (fiable et ordonné) et « pointer » (non fiable : seulement les déplacements de souris, la dernière position suffit).
 
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::time::{Duration, Instant};
 
+use bytes::Bytes;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use webrtc::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::data_channel::RTCDataChannel;
+use webrtc::media::Sample;
 
+use crate::capture::h264::{H264Encoder, H264Params};
 use crate::capture::screen::{JpegEncoder, JPEG_QUALITY, MAX_WIDTH};
 use crate::capture::{Frame, Screen, Screens};
 use crate::clipboard::{self, Clipboard};
 use crate::input::{self, Area, Control, InputSink, Permission};
-use crate::network::webrtc::chunk_frame;
+use crate::network::webrtc::{chunk_frame, VideoOut};
 use crate::pipeline::{fingerprint, Counters, Governor, Slot};
 
 const CURSOR_HZ: u64 = 20;
@@ -80,6 +86,7 @@ pub enum Message {
     Stream { fps: Option<u32>, quality: Option<u8>, width: Option<u32> },
     Screen { index: usize },
     Clip { text: String },
+    Codec { name: String },
 }
 
 /// Tout ce qu'une session partage entre ses canaux : droits, saisie, écrans, réglages d'image, presse-papiers.
@@ -95,19 +102,43 @@ pub struct Session {
     /// Passe à vrai dès que le contrôleur emploie un message récent (ping, stream, screen) : il comprend alors « stats ». Un contrôleur plus ancien
     /// (l'onglet d'ARIA, par exemple) prendrait ce message pour les informations de l'écran et fausserait son affichage : il n'en reçoit donc pas.
     stats_wanted: AtomicBool,
+    /// Piste vidéo H.264 négociée pour cette session (une seule fois, avant l'ouverture des canaux) ; absente = tout passe en JPEG.
+    video: OnceLock<VideoOut>,
+    /// Codec en cours quand la vidéo existe : vrai = H.264, faux = repli JPEG (demandé par le contrôleur ou imposé par un échec d'encodage).
+    h264_on: AtomicBool,
 }
 
 impl Session {
     pub fn new(permissions: HashSet<Permission>, input: SharedInput, screens: Screens, clipboard: SharedClipboard) -> Arc<Self> {
         let primary = screens.primary();
         let initial = clipboard.lock().ok().and_then(|mut c| c.get_text());
-        let session = Arc::new(Self { permissions: RwLock::new(permissions), input, screens, clipboard, stream: Mutex::new(StreamSettings::initial(primary)), sync: Mutex::new(clipboard::Sync::new(initial)), control: Mutex::new(None), stats_wanted: AtomicBool::new(false) });
+        let session = Arc::new(Self { permissions: RwLock::new(permissions), input, screens, clipboard, stream: Mutex::new(StreamSettings::initial(primary)), sync: Mutex::new(clipboard::Sync::new(initial)), control: Mutex::new(None), stats_wanted: AtomicBool::new(false), video: OnceLock::new(), h264_on: AtomicBool::new(false) });
         session.point_input_at(primary);
         session
     }
 
     fn list(&self) -> Vec<Screen> {
         (self.screens.list)()
+    }
+
+    /// Enregistre la piste vidéo H.264 négociée : l'écran part en H.264 jusqu'à nouvel ordre.
+    pub fn set_video(&self, video: VideoOut) {
+        if self.video.set(video).is_ok() {
+            self.h264_on.store(true, Ordering::Relaxed);
+        }
+    }
+
+    fn use_h264(&self) -> bool {
+        self.video.get().is_some() && self.h264_on.load(Ordering::Relaxed)
+    }
+
+    fn codec_name(&self) -> &'static str {
+        if self.use_h264() { "h264" } else { "jpeg" }
+    }
+
+    /// Vrai (une seule fois) si le contrôleur a demandé une image clé (PLI/FIR) ou si on vient de passer en H.264.
+    fn take_keyframe_request(&self) -> bool {
+        self.video.get().is_some_and(|video| video.keyframe_wanted.swap(false, Ordering::Relaxed))
     }
 
     /// La saisie vise l'écran choisi (sinon la souris atterrirait toujours sur l'écran principal).
@@ -129,7 +160,12 @@ impl Session {
         let current = self.snapshot();
         let mut names: Vec<&str> = current.iter().map(|p| p.as_str()).collect();
         names.sort_unstable();
-        let features: Vec<&str> = FEATURES.iter().copied().filter(|f| *f != "clipboard" || self.allows(Permission::ControlKeyboard)).collect();
+        let features: Vec<&str> = FEATURES
+            .iter()
+            .copied()
+            .filter(|f| *f != "clipboard" || self.allows(Permission::ControlKeyboard))
+            .chain(self.video.get().map(|_| "h264"))
+            .collect();
         json!({"t": "info", "width": width, "height": height, "permissions": names, "screens": screens, "screen": selected, "features": features})
     }
 
@@ -177,7 +213,7 @@ impl Session {
             };
         }
         let Ok(message) = serde_json::from_slice::<Message>(data) else { return denied("commande illisible") };
-        if matches!(message, Message::Ping { .. } | Message::Stream { .. } | Message::Screen { .. }) {
+        if matches!(message, Message::Ping { .. } | Message::Stream { .. } | Message::Screen { .. } | Message::Codec { .. }) {
             self.stats_wanted.store(true, Ordering::Relaxed);
         }
         match message {
@@ -203,6 +239,24 @@ impl Session {
                 }
                 self.point_input_at(index);
                 vec![self.info()]
+            }
+            Message::Codec { name } => {
+                if !self.allows(Permission::ViewScreen) {
+                    return denied("permission refusée");
+                }
+                match (name.as_str(), self.video.get()) {
+                    ("jpeg", _) => {
+                        self.h264_on.store(false, Ordering::Relaxed);
+                        vec![]
+                    }
+                    ("h264", Some(video)) => {
+                        video.keyframe_wanted.store(true, Ordering::Relaxed);   // le contrôleur doit pouvoir décoder tout de suite
+                        self.h264_on.store(true, Ordering::Relaxed);
+                        vec![]
+                    }
+                    ("h264", None) => denied("H.264 indisponible"),
+                    _ => denied("codec inconnu"),
+                }
             }
             Message::Clip { text } => {
                 if !self.allows(Permission::ControlKeyboard) {
@@ -319,14 +373,27 @@ async fn share_clipboard(channel: Arc<RTCDataChannel>, session: Arc<Session>) {
     }
 }
 
+/// Débit demandé à l'encodeur H.264 pour le réglage « qualité » du contrôleur (20 à 90) : ~250 kbit/s au plus bas, ~1,9 Mbit/s à 55, ~5 Mbit/s à 90.
+pub fn h264_kbps(quality: u8) -> u32 {
+    let quality = u32::from(quality);
+    quality * quality * 5 / 8
+}
+
+/// Ce que l'étape d'encodage remet à l'étape d'envoi.
+enum Packet {
+    Jpeg(Vec<u8>),
+    H264 { data: Vec<u8>, duration: Duration },
+}
+
 /// Flux d'images en trois étapes qui tournent en parallèle, reliées par des boîtes aux lettres « dernière valeur » :
 ///   capture (thread) -> encodage (thread) -> envoi (tâche tokio).
 /// Une étape lente ne fait jamais grossir de file : la suivante prend toujours l'image la plus récente. On n'encode ni n'envoie un écran qui n'a pas
 /// changé, et on s'arrête de capturer quand le canal d'envoi est saturé (inutile d'encoder des images qu'on jettera). Les réglages (images par
 /// seconde, qualité, largeur, écran) sont relus à chaque image : un changement s'applique tout de suite.
+/// Le codec aussi est relu à chaque image : JPEG par le canal « frames », ou H.264 par la piste vidéo si elle a été négociée (voir `Session::use_h264`).
 fn start_frames(channel: Arc<RTCDataChannel>, session: Arc<Session>) {
     let raw: Arc<Slot<Frame>> = Slot::new();
-    let jpegs: Arc<Slot<Vec<u8>>> = Slot::new();
+    let packets: Arc<Slot<Packet>> = Slot::new();
     let counters = Arc::new(Counters::default());
     let pressure = Arc::new(AtomicBool::new(false));
 
@@ -387,55 +454,99 @@ fn start_frames(channel: Arc<RTCDataChannel>, session: Arc<Session>) {
         });
     }
 
-    // 2. Encodage : ne prend que la dernière image capturée.
+    // 2. Encodage : ne prend que la dernière image capturée. L'encodeur H.264 (COM / Media Foundation) vit et meurt dans CE thread.
     {
-        let (raw, jpegs, counters, session) = (raw.clone(), jpegs.clone(), counters.clone(), session.clone());
+        let (raw, packets, counters, session) = (raw.clone(), packets.clone(), counters.clone(), session.clone());
         std::thread::spawn(move || {
-            let mut encoder = JpegEncoder::new();
+            let mut jpeg = JpegEncoder::new();
+            let mut h264: Option<H264Encoder> = None;
+            let mut failures = 0u32;
             while let Some(frame) = raw.take_blocking() {
                 let settings = session.settings();
                 let started = Instant::now();
-                match encoder.encode(frame, settings.width, settings.quality) {
-                    Ok(jpeg) => {
-                        Counters::add(&counters.encode_us, started.elapsed().as_micros() as u64);
-                        Counters::add(&counters.encoded, 1);
-                        jpegs.put(jpeg);
+                let packet = if session.use_h264() {
+                    let params = H264Params { max_width: settings.width, fps: settings.fps, kbps: h264_kbps(settings.quality) };
+                    match h264.get_or_insert_with(H264Encoder::new).encode(frame, params, session.take_keyframe_request()) {
+                        Ok(encoded) => {
+                            failures = 0;
+                            encoded.map(|e| Packet::H264 { data: e.data, duration: Duration::from_millis(1000 / u64::from(settings.fps.max(1))) })
+                        }
+                        Err(error) => {
+                            eprintln!("[capture] H.264 : {error:#}");
+                            failures += 1;
+                            if failures >= 3 {
+                                eprintln!("[capture] H.264 abandonné : retour au JPEG");
+                                session.h264_on.store(false, Ordering::Relaxed);   // l'envoi le signale au contrôleur
+                            }
+                            None
+                        }
                     }
-                    Err(error) => eprintln!("[capture] {error:#}"),
+                } else {
+                    h264 = None;
+                    match jpeg.encode(frame, settings.width, settings.quality) {
+                        Ok(data) => Some(Packet::Jpeg(data)),
+                        Err(error) => {
+                            eprintln!("[capture] {error:#}");
+                            None
+                        }
+                    }
+                };
+                if let Some(packet) = packet {
+                    Counters::add(&counters.encode_us, started.elapsed().as_micros() as u64);
+                    Counters::add(&counters.encoded, 1);
+                    packets.put(packet);
                 }
             }
-            jpegs.close();
+            packets.close();
         });
     }
 
-    // 3. Envoi : saute l'image si le canal est déjà chargé (le retard ne s'accumule jamais), et rapporte les mesures toutes les 2 s.
+    // 3. Envoi : saute l'image JPEG si le canal est déjà chargé (le retard ne s'accumule jamais), écrit les images H.264 sur la piste vidéo, et rapporte
+    //    les mesures toutes les 2 s.
     tokio::spawn(async move {
         let mut governor = Governor::new();
         let mut frame_id = 0u32;
+        let mut announced: Option<&'static str> = None;
         let mut tick = tokio::time::interval(Duration::from_millis(100));
         let mut window = Instant::now();
         loop {
             tokio::select! {
-                next = jpegs.take_async() => {
-                    let Some(jpeg) = next else { break };
-                    if channel.buffered_amount().await > governor.limit() {
-                        Counters::add(&counters.dropped, 1);
-                        pressure.store(true, Ordering::Relaxed);
-                        continue;
+                next = packets.take_async() => {
+                    let Some(packet) = next else { break };
+                    match packet {
+                        Packet::Jpeg(jpeg) => {
+                            if channel.buffered_amount().await > governor.limit() {
+                                Counters::add(&counters.dropped, 1);
+                                pressure.store(true, Ordering::Relaxed);
+                                continue;
+                            }
+                            governor.observe(jpeg.len());
+                            let mut failed = false;
+                            for chunk in chunk_frame(frame_id, &jpeg) {
+                                if channel.send(&chunk).await.is_err() { failed = true; break; }
+                            }
+                            if failed { break; }
+                            frame_id = frame_id.wrapping_add(1);
+                            Counters::add(&counters.sent, 1);
+                            Counters::add(&counters.bytes, jpeg.len() as u64);
+                        }
+                        Packet::H264 { data, duration } => {
+                            let Some(video) = session.video.get() else { continue };
+                            let size = data.len() as u64;
+                            // Pas de file ici : RTP part tout de suite ; le débit est réglé à l'encodeur (qualité), les pertes par NACK / image clé (PLI).
+                            if video.track.write_sample(&Sample { data: Bytes::from(data), duration, ..Default::default() }).await.is_err() { break; }
+                            Counters::add(&counters.sent, 1);
+                            Counters::add(&counters.bytes, size);
+                        }
                     }
-                    governor.observe(jpeg.len());
-                    let mut failed = false;
-                    for chunk in chunk_frame(frame_id, &jpeg) {
-                        if channel.send(&chunk).await.is_err() { failed = true; break; }
-                    }
-                    if failed { break; }
-                    frame_id = frame_id.wrapping_add(1);
-                    Counters::add(&counters.sent, 1);
-                    Counters::add(&counters.bytes, jpeg.len() as u64);
                 }
                 _ = tick.tick() => {
                     // Indépendamment des images : la pression retombe dès que le canal se vide (sinon la capture, arrêtée, ne reprendrait jamais).
                     pressure.store(channel.buffered_amount().await > governor.limit() / 2, Ordering::Relaxed);
+                    if session.stats_wanted.load(Ordering::Relaxed) && announced != Some(session.codec_name()) {
+                        announced = Some(session.codec_name());
+                        session.send_control(json!({"t": "codec", "name": announced})).await;
+                    }
                     if window.elapsed() >= STATS_EVERY {
                         let report = counters.report(window.elapsed().as_millis() as u64);
                         window = Instant::now();
@@ -446,7 +557,7 @@ fn start_frames(channel: Arc<RTCDataChannel>, session: Arc<Session>) {
             }
         }
         raw.close();
-        jpegs.close();
+        packets.close();
     });
 }
 
@@ -461,6 +572,45 @@ mod tests {
         let input: SharedInput = Arc::new(Mutex::new(Box::new(LogInput::new())));
         let clip: SharedClipboard = Arc::new(Mutex::new(Box::new(MemoryClipboard(clipboard.map(String::from)))));
         (Session::new(permissions.iter().copied().collect(), input, synthetic_backend(), clip.clone()), clip)
+    }
+
+    #[test]
+    fn without_a_video_track_everything_stays_on_jpeg() {
+        let (all, _) = session(&ALL, None);
+        assert!(!all.use_h264());
+        assert!(!all.info()["features"].as_array().unwrap().iter().any(|f| f == "h264"));
+        assert_eq!(run(&all, r#"{"t":"codec","name":"h264"}"#)[0]["reason"], "H.264 indisponible");
+        assert!(run(&all, r#"{"t":"codec","name":"jpeg"}"#).is_empty());
+    }
+
+    #[test]
+    fn a_negotiated_video_track_is_announced_and_the_controller_can_fall_back_to_jpeg() {
+        let (all, _) = session(&ALL, None);
+        all.set_video(VideoOut::new());
+        assert!(all.use_h264(), "H.264 par défaut dès que la piste existe");
+        assert!(all.info()["features"].as_array().unwrap().iter().any(|f| f == "h264"));
+        assert!(run(&all, r#"{"t":"codec","name":"jpeg"}"#).is_empty());
+        assert_eq!(all.codec_name(), "jpeg");
+        assert!(run(&all, r#"{"t":"codec","name":"h264"}"#).is_empty());
+        assert_eq!(all.codec_name(), "h264");
+        assert!(all.take_keyframe_request(), "repasser en H.264 demande une image clé");
+        assert!(!all.take_keyframe_request(), "une demande ne sert qu'une fois");
+        assert_eq!(run(&all, r#"{"t":"codec","name":"vp9"}"#)[0]["reason"], "codec inconnu");
+    }
+
+    #[test]
+    fn switching_codec_needs_the_view_permission() {
+        let (none, _) = session(&[], None);
+        none.set_video(VideoOut::new());
+        assert_eq!(run(&none, r#"{"t":"codec","name":"jpeg"}"#)[0]["reason"], "permission refusée");
+        assert!(none.use_h264());
+    }
+
+    #[test]
+    fn the_video_bitrate_follows_the_quality_setting() {
+        assert_eq!(h264_kbps(20), 250);
+        assert!(h264_kbps(35) < h264_kbps(55) && h264_kbps(55) < h264_kbps(80));
+        assert!((1_800..2_000).contains(&h264_kbps(55)));
     }
 
     const VIEW: [Permission; 1] = [Permission::ViewScreen];

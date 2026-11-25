@@ -2,3 +2,6 @@
 
 pub mod signaling;
 pub mod webrtc;
+
+#[cfg(test)]
+mod negotiation_test;

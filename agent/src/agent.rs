@@ -16,7 +16,8 @@ use crate::config::{self, Config};
 use crate::identity::{self, agent_auth_message, answer_message, Identity};
 use crate::input::{InputSink, Permission};
 use crate::network::signaling::{self, ClientMessage, IceServerConfig, ServerMessage, Socket};
-use crate::network::webrtc::Peer;
+use crate::network::webrtc::{offer_wants_h264, Peer};
+use crate::capture::h264::H264Encoder;
 use crate::capture::Screens;
 use crate::clipboard::SystemClipboard;
 use crate::session::{attach_channel, Session, SharedClipboard, SharedInput};
@@ -626,7 +627,12 @@ impl Agent {
                 });
             }
         });
-        let peer = Peer::new(&active.plan.ice, session_id.to_string(), out.clone(), on_channel, on_state).await?;
+        // Vidéo H.264 seulement si le contrôleur la demande ET que cette machine sait l'encoder ; sinon rien ne change (JPEG par « frames »).
+        let with_video = offer_wants_h264(&sdp) && H264Encoder::available();
+        let peer = Peer::new(&active.plan.ice, session_id.to_string(), out.clone(), on_channel, on_state, with_video).await?;
+        if let Some(video) = peer.video() {
+            handle.set_video(video);
+        }
         let answer = peer.answer(sdp.clone()).await?;
         // Signature de la réponse sur CETTE offre : seul le détenteur de la clé privée de l'appareil peut répondre au nom de cet appareil.
         let signature = self.identity.sign(&answer_message(session_id, &sdp, &answer));
