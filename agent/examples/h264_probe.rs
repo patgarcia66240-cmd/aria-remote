@@ -38,6 +38,11 @@ use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSampl
 use webrtc::track::track_local::TrackLocal;
 
 const PAGE: &str = include_str!("h264_probe.html");
+// Page de contrôle du contrôleur de bureau (desktop/web/video.js), servie avec la même CSP que la fenêtre Tauri (desktop/tauri.conf.json).
+const CANVAS_PAGE: &str = include_str!("h264_canvas.html");
+const CANVAS_JS: &str = include_str!("h264_canvas.js");
+const VIDEO_JS: &str = include_str!("../../desktop/web/video.js");
+const TAURI_CSP: &str = "default-src 'self'; connect-src ipc: http://ipc.localhost 'self' https:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'";
 const START_CODE: [u8; 4] = [0, 0, 0, 1];
 
 /// Dégradations simulées sur l'envoi RTP : perte aléatoire, délai fixe + gigue. Posé AVANT l'intercepteur NACK dans le registre, donc au plus
@@ -171,6 +176,8 @@ async fn offer(State(app): State<Arc<App>>, Json(body): Json<Sdp>) -> Result<Jso
 }
 
 async fn answer(app: &Arc<App>, sdp: String) -> Result<String> {
+    // Même test que l'agent : ce navigateur demande-t-il bien de la vidéo H.264 que l'agent accepterait ?
+    println!("[offre] vidéo H.264 demandée (test de l'agent) : {}", remote_agent::network::webrtc::offer_wants_h264(&sdp));
     let mut media = MediaEngine::default();
     media.register_codec(
         RTCRtpCodecParameters {
@@ -272,7 +279,14 @@ async fn main() -> Result<()> {
         }
     });
 
-    let router = Router::new().route("/", get(|| async { Html(PAGE) })).route("/offer", post(offer)).with_state(app);
+    let js = |body: &'static str| ([(axum::http::header::CONTENT_TYPE, "text/javascript")], body);
+    let router = Router::new()
+        .route("/", get(|| async { Html(PAGE) }))
+        .route("/canvas", get(|| async { ([(axum::http::header::CONTENT_SECURITY_POLICY, TAURI_CSP)], Html(CANVAS_PAGE)) }))
+        .route("/canvas.js", get(move || async move { js(CANVAS_JS) }))
+        .route("/video.js", get(move || async move { js(VIDEO_JS) }))
+        .route("/offer", post(offer))
+        .with_state(app);
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port as u16)).await?;
     axum::serve(listener, router).await?;
     Ok(())

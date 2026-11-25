@@ -1,6 +1,7 @@
 // Interface d'ARIA Remote Desktop. Tout passe par les commandes Rust (clé du contrôleur, appels réseau) : la page ne voit jamais la clé.
 import { KINDS, guessKind, loadKinds, machineSvg, saveKind } from './machines.js'
 import { createRequest, keyMessage, openSession, pointerMessage, wheelMessage } from './session.js'
+import { canShowVideo, h264Codecs, showVideo, videoStalled } from './video.js'
 import { MODES, activeTab, canControl, canHost, clockText, consentSecondsLeft, hostBadge, formatCode, hasTabs, hostScreen, permissionText, secondsLeft } from './host.js'
 import { AutoQuality, ClipboardSync, FpsMeter, LatencyMeter, PRESETS, PRESET_ORDER, SHORTCUTS, latencyTone, screenLabel, shortcutMessages, statsTitle, streamMessage, stuckKeys } from './tools.js'
 
@@ -419,6 +420,7 @@ async function connectTo(device) {
       deviceId: device.device_id, permissions, request,
       onState: (state) => { if (connecting) { connecting.state = state; renderDevices() } else { viewerState(state) } },
       onInfo: onControl, onFrame: drawFrame, onCursor: moveCursor,
+      videoCodecs: videoWanted() ? h264Codecs() : [], onVideo: attachVideo,
     })
     live = { link, device, permissions }
     connecting = null
@@ -447,6 +449,7 @@ function makeTools() {
   return {
     features: new Set(), screens: [], screen: 0, infoSeen: false, started: false, timers: [], clipTimer: null, sync: null, lastToast: 0,
     latency: new LatencyMeter(), fps: new FpsMeter(), lastFps: null, agent: null, freshAgent: false,
+    codec: 'jpeg', video: null, videoSince: 0, videoFailed: false,
     quality: pref('quality', 'auto'), auto: new AutoQuality('balanced'),
     clipOn: pref('clip', '1') === '1',
   }
@@ -470,6 +473,7 @@ function onControl(msg) {
     case 'pong': return onPong(msg.id)
     case 'stats': tools.agent = msg; tools.freshAgent = true; return updateStats()
     case 'clip': return receiveClipboard(msg.text)
+    case 'codec': return setCodec(msg.name)
     case 'denied': {
       if (Date.now() - tools.lastToast > 4000) { tools.lastToast = Date.now(); toast(`L'appareil a refusé : ${msg.reason || 'commande non autorisée'}`, 'bad') }
       return undefined
@@ -484,6 +488,7 @@ function applyInfo(info) {
     $('v-size').textContent = `${info.width}×${info.height}`
   }
   tools.features = new Set(info.features || [])
+  if (tools.features.has('h264') && !tools.videoFailed && tools.codec !== 'h264') setCodec('h264')    // la vidéo est négociée : l'agent commence par elle
   tools.screens = info.screens || []
   tools.screen = info.screen ?? 0
   tools.infoSeen = true
@@ -520,6 +525,7 @@ function startTools() {
   const every = (ms, fn) => tools.timers.push(setInterval(fn, ms))
   applyQuality()
   every(1000, tickFps)
+  every(1000, watchVideo)
   if (tools.features.has('ping')) { pingNow(); every(2000, pingNow) }
   if (tools.features.has('stream')) every(3000, autoSample)
   startClipboard()
@@ -529,6 +535,7 @@ function startTools() {
 
 function stopTools() {
   tools?.timers.forEach(clearInterval)
+  tools?.video?.stop()
   clearInterval(tools?.clipTimer)
   tools = null
   show($('v-stats'), false)
@@ -554,7 +561,7 @@ function updateStats() {
   $('v-lat').textContent = average === null ? '' : `${average} ms`
   $('v-fps').textContent = agent ? (agent.idle ? 'écran fixe' : `${agent.fps} i/s`) : tools.lastFps === null ? '' : `${tools.lastFps} i/s`
   $('v-stats').dataset.tone = latencyTone(average)
-  $('v-stats').title = statsTitle({ rtt: average, agent })
+  $('v-stats').title = statsTitle({ rtt: average, agent, codec: tools.features.has('h264') ? tools.codec : null })
   show($('v-stats'), average !== null || tools.lastFps !== null || !!agent)
 }
 
@@ -684,6 +691,38 @@ function peek(on) {
   const header = document.querySelector('header')
   if (on) header.classList.add('peek')
   else peekTimer = setTimeout(() => { if (!menu) header.classList.remove('peek') }, 700)
+}
+
+// --- Vidéo H.264 (écran distant) ------------------------------------------------------------------------------------
+
+// L'agent envoie ≥ 1 image toutes les 1,5 s même devant un écran fixe : 5 s sans image = la vidéo ne passe pas, on retourne au JPEG.
+const VIDEO_STALL_MS = 5000
+const videoWanted = () => pref('video', 'on') !== 'off' && canShowVideo()
+
+function attachVideo(stream) {
+  if (!tools) return
+  tools.video?.stop()
+  tools.video = showVideo(stream, $('screen'), () => tools?.fps.hit())
+  tools.videoSince = performance.now()
+}
+
+function setCodec(name) {
+  if (!tools || (name !== 'h264' && name !== 'jpeg')) return
+  if (name === 'h264') tools.videoSince = performance.now()
+  tools.codec = name
+  updateStats()
+}
+
+function watchVideo() {
+  if (!tools || tools.codec !== 'h264' || !tools.features.has('h264')) return
+  if (document.hidden) { tools.videoSince = performance.now(); return }      // fenêtre réduite : le navigateur ne dessine plus, ce n'est pas une panne
+  const stalled = videoStalled({ now: performance.now(), lastFrameAt: tools.video?.lastFrameAt() ?? null, since: tools.videoSince, stallMs: VIDEO_STALL_MS })
+  if (!stalled) return
+  tools.videoFailed = true
+  tools.codec = 'jpeg'
+  sendToDevice({ t: 'codec', name: 'jpeg' })
+  toast('La vidéo H.264 ne passe pas : retour aux images JPEG.', 'bad')
+  updateStats()
 }
 
 // --- Écran distant ----------------------------------------------------------------------------------------------------

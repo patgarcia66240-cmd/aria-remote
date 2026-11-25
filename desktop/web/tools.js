@@ -88,9 +88,10 @@ export function latencyTone(ms) {
 }
 
 /** Texte de l'infobulle des statistiques (ce que l'agent mesure de son côté + la latence mesurée ici). */
-export function statsTitle({ rtt, agent }) {
+export function statsTitle({ rtt, agent, codec }) {
   const parts = []
   if (rtt !== null && rtt !== undefined) parts.push(`latence ${rtt} ms`)
+  if (codec) parts.push(codec === 'h264' ? 'vidéo H.264' : 'images JPEG')
   if (agent) {
     parts.push(agent.idle ? 'écran fixe (rien à envoyer)' : `${agent.fps} images/s envoyées`)
     parts.push(`${agent.kbps} kb/s`)

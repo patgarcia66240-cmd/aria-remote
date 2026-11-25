@@ -105,12 +105,15 @@ export class FrameAssembler {
 /**
  * Ouvre une session de contrôle : la création ATTEND que la personne devant l'appareil accepte (jusqu'à une minute),
  * puis négocie WebRTC. Renvoie { sessionId, sendInput, usePointerChannel, close }.
+ * `videoCodecs` : codecs H.264 décodables ici (voir video.js) ; s'il y en a, l'offre demande aussi une piste vidéo (l'écran en H.264) et `onVideo(flux)`
+ * reçoit le flux. Un agent sans H.264 répond sans vidéo : l'écran reste en JPEG par « frames », comme avant.
  * États publiés par onState : asking, connecting, connected, reconnecting, lost, closed.
  * `request` (voir createRequest) est obligatoire ; `makePeer` et `sleep` sont injectables pour les tests.
  */
 export async function openSession({
   deviceId, permissions, onState = () => {}, onFrame = () => {}, onInfo = () => {}, onCursor = () => {},
   makePeer = (config) => new RTCPeerConnection(config), request, sleep = sleepMs, timeoutMs = CONNECT_TIMEOUT_MS,
+  videoCodecs = [], onVideo = () => {},
 }) {
   onState('asking')
   const session = await request.post('/sessions', { device_id: deviceId, permissions })
@@ -150,6 +153,15 @@ export async function openSession({
         if (message.t === 'cursor') onCursor(message)     // position du pointeur distant : ne remplace pas les infos de l'écran
         else onInfo(message)
       } catch { /* message de contrôle illisible : ignoré */ }
+    }
+
+    if (videoCodecs.length) {
+      const transceiver = peer.addTransceiver('video', { direction: 'recvonly' })
+      transceiver.setCodecPreferences?.(videoCodecs)       // H.264 seulement : c'est ce que l'agent encode
+      peer.ontrack = (event) => {
+        if (mine !== generation) return
+        onVideo(event.streams?.[0] || new MediaStream([event.track]))
+      }
     }
 
     const queued = []            // candidats locaux produits avant que l'offre soit partie
