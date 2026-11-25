@@ -186,10 +186,128 @@ impl Counters {
     }
 }
 
+/// Régulateur du débit de l'encodeur vidéo (docs/PLAN_H264.md, étape 5). `webrtc-rs` n'a pas d'estimateur de bande passante : le débit se règle ICI,
+/// d'après le taux de perte que le contrôleur rapporte (RTCP « receiver report », environ un par seconde). Principe AIMD : baisse rapide dès que la
+/// perte dépasse ~5 %, remontée lente (par paliers de 5 % du plafond) après trois rapports calmes de suite. Le plafond est le débit du réglage de
+/// qualité choisi par le contrôleur ; ce régulateur ne le dépasse jamais.
+pub struct RateControl {
+    permille: u32,
+    calm: u32,
+    cuts: u64,
+}
+
+impl RateControl {
+    /// Jamais en dessous du quart du plafond : en deçà l'image devient illisible, mieux vaut que le contrôleur change de préréglage.
+    pub const FLOOR: u32 = 250;
+    pub const CEILING: u32 = 1000;
+    /// Débit absolu minimal passé à l'encodeur (kbit/s).
+    pub const MIN_KBPS: u32 = 100;
+    const CUT_FROM: u8 = 13;       // fraction de perte (sur 256) à partir de laquelle on baisse : ~5 %
+    const CALM_UNTIL: u8 = 3;      // en dessous, la connexion est calme : ~1 %
+    const CALM_REPORTS: u32 = 3;
+    const STEP: u32 = 50;
+
+    pub fn new() -> Self {
+        Self { permille: Self::CEILING, calm: 0, cuts: 0 }
+    }
+
+    /// Un rapport du contrôleur : `fraction_lost` = paquets perdus depuis le rapport précédent, sur 256.
+    pub fn on_receiver_report(&mut self, fraction_lost: u8) {
+        if fraction_lost >= Self::CUT_FROM {
+            self.permille = (self.permille * 85 / 100).max(Self::FLOOR);
+            self.calm = 0;
+            self.cuts += 1;
+        } else if fraction_lost <= Self::CALM_UNTIL {
+            self.calm += 1;
+            if self.calm >= Self::CALM_REPORTS {
+                self.permille = (self.permille + Self::STEP).min(Self::CEILING);
+                self.calm = 0;
+            }
+        } else {
+            self.calm = 0;       // perte modérée : on ne bouge pas
+        }
+    }
+
+    /// Part du plafond actuellement utilisée, en millièmes (1000 = plafond).
+    pub fn permille(&self) -> u32 {
+        self.permille
+    }
+
+    /// Débit à demander à l'encodeur pour ce plafond (kbit/s).
+    pub fn kbps(&self, cap_kbps: u32) -> u32 {
+        (cap_kbps * self.permille / 1000).max(Self::MIN_KBPS.min(cap_kbps))
+    }
+
+    /// Nombre de baisses depuis le dernier appel (le contrôleur les lit comme des « images abandonnées » : voir `Session::start_frames`).
+    pub fn take_cuts(&mut self) -> u64 {
+        std::mem::take(&mut self.cuts)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::time::Duration;
+
+    #[test]
+    fn the_rate_drops_fast_on_loss_and_never_below_the_floor() {
+        let mut rate = RateControl::new();
+        assert_eq!(rate.permille(), 1000);
+        rate.on_receiver_report(30);
+        assert_eq!(rate.permille(), 850);
+        rate.on_receiver_report(13);
+        assert_eq!(rate.permille(), 722);
+        for _ in 0..30 {
+            rate.on_receiver_report(255);
+        }
+        assert_eq!(rate.permille(), RateControl::FLOOR);
+        assert_eq!(rate.take_cuts(), 32);
+        assert_eq!(rate.take_cuts(), 0, "les baisses se comptent par fenêtre");
+    }
+
+    #[test]
+    fn the_rate_climbs_slowly_after_calm_reports_and_never_past_the_cap() {
+        let mut rate = RateControl::new();
+        rate.on_receiver_report(255);
+        rate.on_receiver_report(255);
+        let low = rate.permille();
+        rate.on_receiver_report(0);
+        rate.on_receiver_report(0);
+        assert_eq!(rate.permille(), low, "deux rapports calmes ne suffisent pas");
+        rate.on_receiver_report(0);
+        assert_eq!(rate.permille(), low + 50);
+        for _ in 0..300 {
+            rate.on_receiver_report(0);
+        }
+        assert_eq!(rate.permille(), RateControl::CEILING);
+    }
+
+    #[test]
+    fn a_moderate_loss_holds_the_rate_and_interrupts_the_calm_streak() {
+        let mut rate = RateControl::new();
+        rate.on_receiver_report(255);
+        let held = rate.permille();
+        rate.on_receiver_report(0);
+        rate.on_receiver_report(0);
+        rate.on_receiver_report(8);       // ~3 % : ni calme ni grave
+        rate.on_receiver_report(0);
+        assert_eq!(rate.permille(), held, "la série de rapports calmes est repartie de zéro");
+        assert_eq!(rate.take_cuts(), 1);
+    }
+
+    #[test]
+    fn the_encoder_gets_a_share_of_the_cap_with_a_small_absolute_minimum() {
+        let mut rate = RateControl::new();
+        assert_eq!(rate.kbps(1890), 1890);
+        rate.on_receiver_report(200);
+        assert_eq!(rate.kbps(2000), 1700);
+        for _ in 0..20 {
+            rate.on_receiver_report(200);
+        }
+        assert_eq!(rate.kbps(2000), 500);
+        assert_eq!(rate.kbps(300), 100, "jamais sous 100 kbit/s");
+        assert_eq!(rate.kbps(80), 80, "un plafond déjà plus bas que le minimum reste le plafond");
+    }
 
     #[test]
     fn a_new_value_replaces_the_one_nobody_took_and_is_counted() {

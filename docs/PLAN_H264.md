@@ -1,6 +1,6 @@
 # Chantier H.264 : envoyer l'écran comme une vidéo
 
-Statut : préparation ; étapes 1 à 3 faites côté agent, étape 4 faite pour le contrôleur de bureau seulement (voir les sections « Résultats ... ») ; contrôleur ARIA (`ui/`) pas commencé. Rien d'implémenté dans l'agent. Point de départ : agent 1.12.0, desktop 0.5.2.
+Statut : préparation ; étapes 1 à 3 faites côté agent, étapes 4 et 5 faites pour le contrôleur de bureau seulement (voir les sections « Résultats ... ») ; contrôleur ARIA (`ui/`) pas commencé ; reste l'étape 6 (essai réel sur Internet, publication). Rien d'implémenté dans l'agent. Point de départ : agent 1.12.0, desktop 0.5.2.
 
 ## Objectif
 
@@ -136,6 +136,26 @@ Limites :
 - La signature de l'offre avec `m=video` n'a pas été exercée avec la vraie chaîne (serveur + clés) ; elle couvre le SDP entier, donc la vidéo est couverte comme le reste.
 - Contrôleur ARIA (`ui/`) : pas fait (ses tests Vitest ne tournent pas dans ce dépôt) ; il reste en JPEG.
 - Pas de réglage visible pour forcer le JPEG (seulement la préférence `aria-remote-video`), pas de changement de version ni de publication.
+
+## Résultats de l'étape 5 : débit adaptatif et qualité automatique (25 nov. 2026, branche `feat/h264-rate`)
+
+Principe : `webrtc-rs` n'a pas d'estimateur de bande passante (confirmé étape 2), donc l'agent règle lui-même le débit de l'encodeur.
+- `pipeline::RateControl` (agent) : d'après le taux de perte du rapport de réception RTCP du contrôleur (~1 par seconde), baisse rapide (x0,85) dès ~5 % de perte, remontée lente (+5 % du plafond) après trois rapports calmes (<= ~1 %), jamais sous le quart du plafond, jamais au-dessus. Le plafond reste celui du réglage « qualité » du contrôleur (`h264_kbps`).
+- `network/webrtc.rs` : le RTCP du contrôleur alimente le régulateur ; `session.rs` demande à l'encodeur `plafond x part` à chaque image (le changement de débit s'applique à chaud sur l'encodeur Windows) et envoie dans `stats` : `target_kbps` (débit demandé) et `dropped` = nombre de baisses de la fenêtre.
+- Contrôleur de bureau : AUCUN changement de logique. `AutoQuality` lit `dropped` (images abandonnées) ; en H.264 les baisses de débit y jouent ce rôle, donc des pertes répétées font passer au préréglage inférieur (plafond plus bas) et une connexion calme fait remonter. L'infobulle affiche le débit demandé à l'encodeur.
+
+Réglages par préréglage (plafond H.264 déduit de la qualité JPEG du préréglage) : Économie ~765 kbit/s, Équilibré ~1,9 Mbit/s, Haute qualité ~3,5 Mbit/s.
+
+Vérifié :
+- 98 tests agent verts (92 avant) et 67 tests desktop (65 avant). Régulateur testé seul (baisse, plancher, remontée lente, perte modérée, débit absolu minimal).
+- Test de bout en bout dans un processus : un contrôleur qui perd 35 % des paquets vidéo reçus fait baisser le débit de l'agent, deux fois, sans descendre sous le plancher ; sans perte, le débit reste au plafond. Vérifié que le test échoue quand la perte est mise à zéro.
+- L'encodeur suit bien une baisse de débit demandée en cours de flux (test sur du bruit : demandé 3000 -> sorti ~1600 kbit/s, puis demandé 500 -> sorti ~530 kbit/s ; l'encodeur logiciel n'atteint pas les débits élevés sur ce contenu).
+
+Limites :
+- Seule la PERTE règle le débit. Une file qui grossit sans perte (retard croissant) n'est vue que par la latence mesurée par le contrôleur, via `AutoQuality` (rtt > 250 ms). Pas de mesure de délai à la manière de GCC (RTCP/TWCC ne sont pas exploités pour le délai).
+- Les seuils (5 %, 1 %, 3 rapports, x0,85, +5 %) sont posés sans essai sur un vrai réseau : à régler à l'étape 6 avec des mesures réelles.
+- La perte simulée du test est une perte aléatoire à la réception sur la boucle locale, pas un vrai goulot (débit limité, file d'attente).
+- Pas de changement de version ni de publication ; contrôleur ARIA (`ui/`) toujours en JPEG.
 
 ## Mesures à faire AVANT de se lancer
 
