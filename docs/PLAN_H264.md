@@ -1,6 +1,6 @@
 # Chantier H.264 : envoyer l'écran comme une vidéo
 
-Statut : préparation ; étape 1 (banc d'essai hors ligne) faite, voir « Résultats du banc d'essai ». Rien d'implémenté dans l'agent. Point de départ : agent 1.12.0, desktop 0.5.2.
+Statut : préparation ; étapes 1 et 2 faites, voir « Résultats du banc d'essai » et « Résultats du prototype de transport ». Rien d'implémenté dans l'agent. Point de départ : agent 1.12.0, desktop 0.5.2.
 
 ## Objectif
 
@@ -73,6 +73,30 @@ Limites (ne pas sur-interpréter) :
 - Non mesuré : pertes de paquets, latence, pilotage du débit, conversion RGBA vers NV12.
 
 Décision : go pour l'étape 2 (prototype de transport). Le gain en débit est net même sans GPU.
+
+## Résultats du prototype de transport (étape 2, 25 nov. 2026)
+
+Sonde : `agent/examples/h264_probe.rs` (+ page `h264_probe.html`). Elle envoie un fichier H.264 de `ffmpeg` (1600x900, 10 images/s, ~1,8 Mbit/s, image clé toutes les 2 s) sur une vraie piste vidéo WebRTC de `webrtc-rs` 0.14 vers le navigateur intégré (Chromium), et simule perte, délai et gigue juste avant le réseau (les retransmissions NACK y sont soumises aussi). Lancer : `cargo run --release --example h264_probe -- clip.h264 --loss 2 --delay 40 --jitter 10`, puis ouvrir `http://127.0.0.1:8099/`.
+
+Mesures sur 30 s après 15 s de chauffe, 40 ms de délai + 10 ms de gigue (300 images envoyées par fenêtre) :
+
+| Perte | Images décodées | Gels | Durée des gels |
+|---|---|---|---|
+| 0 % (témoin) | 260 | 1 | 2,2 s |
+| 2 % | 260 | 0 | 0 |
+| 5 % | 276 | 1 | 0,37 s |
+| 10 % | 270 | 2 | 0,7 s |
+
+Constats :
+- Le navigateur décode du H.264 reçu en RTP depuis `webrtc-rs` : ~1 ms par image, tampon de réception de 11 à 83 ms.
+- Le flux continue à ~9 images/s jusqu'à 10 % de perte simulée ; les gels restent sous la seconde (sauf un gel de 2,2 s dans le témoin sans perte, donc du bruit de mesure).
+- Le nombre de NACK (~650 à 700 par 30 s) ne dépend pas du taux de perte : ils viennent surtout des paquets réordonnés par la gigue simulée (NACK inutiles), pas des vraies pertes.
+- `interceptor` 0.15 n'a pas d'estimateur de bande passante (GCC) : confirmé dans le code. Le pilotage du débit de l'encodeur reste à écrire côté agent.
+- `H264Reader` de `webrtc-media` 0.11 découpe mal ce flux (14 morceaux par image) : découpage Annex B écrit à la main dans la sonde, à reprendre dans l'agent. `libx264` en mode `zerolatency` produit 14 tranches par image ; l'encodeur Media Foundation produira autre chose. Envoyer chaque image entière en un seul échantillon.
+
+Limites : un seul passage de 30 s par cas, aucune tendance nette (le témoin gèle aussi) ; tout en local, pertes simulées côté émetteur ; pas de limite de débit, pas de latence de bout en bout, pas de NAT ni de relais ; navigateur intégré (Chromium), pas WebView2 du desktop.
+
+À faire ensuite (étape 3) : tester dans WebView2, mesurer la latence de bout en bout, passes plus longues et répétées, simulation d'un débit limité.
 
 ## Mesures à faire AVANT de se lancer
 
