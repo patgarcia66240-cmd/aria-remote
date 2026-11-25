@@ -20,6 +20,10 @@ export const streamMessage = (preset) => ({ t: 'stream', fps: preset.fps, qualit
  * dans le canal d'envoi), idle (écran fixe : rien à envoyer) }. « Écran fixe » n'est PAS un signe de connexion lente : sans cette précision, un écran
  * qui ne bouge pas faisait baisser la qualité (peu d'images reçues). Les images abandonnées sont le signal le plus fiable : l'agent les jette quand
  * le réseau ne suit pas le débit demandé.
+ *
+ * En vidéo H.264 il n'y a pas de canal à saturer : l'agent règle lui-même le débit de l'encodeur d'après les pertes que ce contrôleur lui rapporte,
+ * et compte ses baisses de débit dans `dropped` (même sens : « le réseau ne suit pas ce réglage »). Des baisses répétées font donc passer au
+ * préréglage inférieur, dont le plafond de débit est plus bas.
  */
 export class AutoQuality {
   constructor(start = 'balanced') { this.level = PRESET_ORDER.indexOf(start); if (this.level < 0) this.level = 1; this.bad = 0; this.good = 0 }
@@ -95,6 +99,7 @@ export function statsTitle({ rtt, agent, codec }) {
   if (agent) {
     parts.push(agent.idle ? 'écran fixe (rien à envoyer)' : `${agent.fps} images/s envoyées`)
     parts.push(`${agent.kbps} kb/s`)
+    if (agent.target_kbps) parts.push(`débit demandé à l'encodeur ${agent.target_kbps} kb/s`)
     parts.push(`capture ${agent.capture_ms} ms`)
     parts.push(`encodage ${agent.encode_ms} ms`)
     if (agent.dropped > 0) parts.push(`${agent.dropped} abandonnée${agent.dropped > 1 ? 's' : ''} (réseau trop lent pour ce réglage)`)

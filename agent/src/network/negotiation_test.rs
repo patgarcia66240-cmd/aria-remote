@@ -15,7 +15,10 @@ use webrtc::api::APIBuilder;
 use webrtc::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::data_channel::RTCDataChannel;
 use webrtc::ice_transport::ice_candidate::RTCIceCandidateInit;
+use webrtc::interceptor::noop::NoOp;
 use webrtc::interceptor::registry::Registry;
+use webrtc::interceptor::stream_info::StreamInfo;
+use webrtc::interceptor::{Attributes, Interceptor, InterceptorBuilder, RTCPReader, RTCPWriter, RTPReader, RTPWriter};
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
@@ -32,18 +35,80 @@ use crate::clipboard::MemoryClipboard;
 use crate::input::{LogInput, Permission};
 use crate::session::{attach_channel, Session};
 
+/// Perd une part des paquets RTP REÇUS par le contrôleur, avant qu'il les compte : ses rapports de réception (RTCP) montrent alors cette perte à l'agent.
+#[derive(Clone, Copy)]
+struct Lossy(f64);
+
+impl InterceptorBuilder for Lossy {
+    fn build(&self, _id: &str) -> Result<Arc<dyn Interceptor + Send + Sync>, webrtc::interceptor::Error> {
+        Ok(Arc::new(LossyInterceptor { loss: self.0, base: NoOp }))
+    }
+}
+
+struct LossyInterceptor {
+    loss: f64,
+    base: NoOp,
+}
+
+struct LossyReader {
+    loss: f64,
+    next: Arc<dyn RTPReader + Send + Sync>,
+}
+
+#[async_trait::async_trait]
+impl RTPReader for LossyReader {
+    async fn read(&self, buf: &mut [u8], attributes: &Attributes) -> Result<(webrtc::rtp::packet::Packet, Attributes), webrtc::interceptor::Error> {
+        loop {
+            let packet = self.next.read(buf, attributes).await?;
+            if rand::random::<f64>() >= self.loss {
+                return Ok(packet);
+            }
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl Interceptor for LossyInterceptor {
+    async fn bind_rtcp_reader(&self, reader: Arc<dyn RTCPReader + Send + Sync>) -> Arc<dyn RTCPReader + Send + Sync> {
+        self.base.bind_rtcp_reader(reader).await
+    }
+    async fn bind_rtcp_writer(&self, writer: Arc<dyn RTCPWriter + Send + Sync>) -> Arc<dyn RTCPWriter + Send + Sync> {
+        self.base.bind_rtcp_writer(writer).await
+    }
+    async fn bind_local_stream(&self, info: &StreamInfo, writer: Arc<dyn RTPWriter + Send + Sync>) -> Arc<dyn RTPWriter + Send + Sync> {
+        self.base.bind_local_stream(info, writer).await
+    }
+    async fn unbind_local_stream(&self, info: &StreamInfo) {
+        self.base.unbind_local_stream(info).await
+    }
+    async fn bind_remote_stream(&self, _info: &StreamInfo, reader: Arc<dyn RTPReader + Send + Sync>) -> Arc<dyn RTPReader + Send + Sync> {
+        Arc::new(LossyReader { loss: self.loss, next: reader })
+    }
+    async fn unbind_remote_stream(&self, info: &StreamInfo) {
+        self.base.unbind_remote_stream(info).await
+    }
+    async fn close(&self) -> Result<(), webrtc::interceptor::Error> {
+        self.base.close().await
+    }
+}
+
 struct Controller {
     pc: Arc<RTCPeerConnection>,
     control: Arc<RTCDataChannel>,
     rtp_packets: Arc<AtomicUsize>,
     jpeg_messages: Arc<AtomicUsize>,
     texts: Arc<Mutex<Vec<String>>>,
-    _peer: Peer,
+    peer: Peer,
 }
 
 impl Controller {
     fn saw(&self, needle: &str) -> bool {
         self.texts.lock().unwrap().iter().any(|text| text.contains(needle))
+    }
+
+    /// Part du débit plafond que l'agent accorde à l'encodeur (1000 = plafond).
+    fn rate_permille(&self) -> u32 {
+        self.peer.video().map_or(0, |video| video.rate.lock().unwrap().permille())
     }
 }
 
@@ -57,8 +122,9 @@ async fn eventually(what: &str, mut condition: impl FnMut() -> bool) {
     panic!("délai dépassé : {what}");
 }
 
-/// Établit une session complète. `with_video` : le contrôleur met de la vidéo H.264 dans son offre (comme le fera le nouveau contrôleur).
-async fn connect(with_video: bool) -> Controller {
+/// Établit une session complète. `with_video` : le contrôleur met de la vidéo H.264 dans son offre (comme le fera le nouveau contrôleur). `loss` : part des
+/// paquets vidéo que le contrôleur perd à la réception.
+async fn connect(with_video: bool, loss: f64) -> Controller {
     // Côté contrôleur.
     let mut media = MediaEngine::default();
     media
@@ -80,7 +146,9 @@ async fn connect(with_video: bool) -> Controller {
             RTPCodecType::Video,
         )
         .unwrap();
-    let registry = register_default_interceptors(Registry::new(), &mut media).unwrap();
+    let mut registry = Registry::new();
+    registry.add(Box::new(Lossy(loss)));      // en premier : au plus près du réseau, avant les compteurs de réception
+    let registry = register_default_interceptors(registry, &mut media).unwrap();
     let api = APIBuilder::new().with_media_engine(media).with_interceptor_registry(registry).build();
     let pc = Arc::new(api.new_peer_connection(RTCConfiguration::default()).await.unwrap());
 
@@ -149,12 +217,12 @@ async fn connect(with_video: bool) -> Controller {
             }
         }
     });
-    Controller { pc, control, rtp_packets, jpeg_messages, texts, _peer: peer }
+    Controller { pc, control, rtp_packets, jpeg_messages, texts, peer }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_controller_without_video_keeps_getting_jpeg_exactly_as_before() {
-    let controller = connect(false).await;
+    let controller = connect(false, 0.0).await;
     eventually("des images JPEG sur le canal « frames »", || controller.jpeg_messages.load(Ordering::Relaxed) >= 3).await;
     eventually("le message info", || controller.saw("\"t\":\"info\"")).await;
     assert!(!controller.saw("h264"), "un contrôleur qui n'a pas demandé la vidéo ne doit rien voir de H.264 : {:?}", controller.texts.lock().unwrap());
@@ -166,7 +234,7 @@ async fn a_controller_without_video_keeps_getting_jpeg_exactly_as_before() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_controller_that_asks_for_h264_gets_video_and_can_fall_back_to_jpeg() {
     assert!(H264Encoder::available(), "pas d'encodeur H.264 sur cette machine");
-    let controller = connect(true).await;
+    let controller = connect(true, 0.0).await;
     eventually("la fonction h264 dans info", || controller.saw("h264")).await;
     eventually("des paquets vidéo RTP", || controller.rtp_packets.load(Ordering::Relaxed) >= 20).await;
     assert_eq!(controller.jpeg_messages.load(Ordering::Relaxed), 0, "en H.264, le canal JPEG reste muet");
@@ -180,5 +248,18 @@ async fn a_controller_that_asks_for_h264_gets_video_and_can_fall_back_to_jpeg() 
     let before = controller.rtp_packets.load(Ordering::Relaxed);
     controller.control.send(&Bytes::from_static(br#"{"t":"codec","name":"h264"}"#)).await.unwrap();
     eventually("la reprise de la vidéo", || controller.rtp_packets.load(Ordering::Relaxed) > before + 20).await;
+    assert_eq!(controller.rate_permille(), 1000, "aucune perte sur cette liaison : le débit reste au plafond");
+    let _ = controller.pc.close().await;
+}
+
+#[cfg(windows)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_agent_lowers_the_video_bitrate_when_the_controller_reports_heavy_loss() {
+    let controller = connect(true, 0.35).await;
+    eventually("des paquets vidéo RTP", || controller.rtp_packets.load(Ordering::Relaxed) >= 10).await;
+    eventually("une baisse du débit après des rapports de perte", || controller.rate_permille() < 1000).await;
+    let after = controller.rate_permille();
+    eventually("une deuxième baisse (la perte continue)", || controller.rate_permille() < after).await;
+    assert!(controller.rate_permille() >= 250, "jamais sous le plancher");
     let _ = controller.pc.close().await;
 }

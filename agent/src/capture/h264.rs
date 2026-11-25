@@ -332,6 +332,8 @@ mod backend {
 mod tests {
     use super::*;
     use crate::capture::screen::SyntheticScreen;
+    #[cfg(windows)]
+    use crate::capture::Frame;
     use crate::capture::ScreenSource;
 
     #[test]
@@ -391,6 +393,40 @@ mod tests {
             }
             assert!(seen > 0, "aucune image pour {width} px / {kbps} kbit/s");
         }
+    }
+
+    /// Image pleine de bruit qui change à chaque fois : le plus dur à compresser, donc l'encodeur est limité par son débit cible, pas par le contenu.
+    #[cfg(windows)]
+    fn noisy(width: u32, height: u32, seed: u32) -> Frame {
+        let mut state = seed.wrapping_mul(2_654_435_761).wrapping_add(12345);
+        let rgba = (0..width * height * 4)
+            .map(|_| {
+                state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                (state >> 24) as u8
+            })
+            .collect();
+        Frame { width, height, rgba }
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn a_lower_bitrate_request_really_lowers_the_output_while_streaming() {
+        let mut encoder = H264Encoder::new();
+        let mut volume = |kbps: u32, first: u32| {
+            let params = H264Params { max_width: 960, fps: 10, kbps };
+            let mut total = 0usize;
+            for n in 0..40 {
+                let encoded = encoder.encode(noisy(960, 540, first + n), params, false).unwrap();
+                if n >= 10 {
+                    total += encoded.map_or(0, |e| e.data.len());      // on laisse l'encodeur se stabiliser
+                }
+            }
+            total * 8 / 1000 / 3          // kbit/s sur 30 images à 10 images/s
+        };
+        let high = volume(3000, 0);
+        let low = volume(500, 100);
+        println!("débit demandé 3000 -> {high} kbit/s ; 500 -> {low} kbit/s");
+        assert!(low * 2 < high, "le débit demandé n'est pas suivi : {high} kbit/s puis {low} kbit/s");
     }
 
     #[test]

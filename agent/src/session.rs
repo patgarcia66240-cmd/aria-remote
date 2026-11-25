@@ -10,6 +10,8 @@
 //!     codec{name}                 : « jpeg » ou « h264 » (seulement si la vidéo H.264 a été négociée : fonction « h264 » de info).
 //!   agent -> contrôleur : info{width, height, permissions, screens, screen, features}, cursor{x, y}, pong{id}, clip{text}, denied{reason},
 //!     stats{fps, kbps, capture_ms, encode_ms, dropped, idle} toutes les 2 s (voir pipeline.rs), codec{name} quand le codec en cours change.
+//!       En H.264, `dropped` compte les baisses de débit dues aux pertes de la fenêtre (le contrôleur les lit comme des images abandonnées : réseau
+//!       trop lent pour ce réglage) et `target_kbps` donne le débit demandé à l'encodeur.
 //! Écran en H.264 (docs/PLAN_H264.md) : si le contrôleur met de la vidéo H.264 dans son offre et que cette machine sait l'encoder, l'écran passe par
 //!   une piste vidéo WebRTC ; « frames » reste ouvert et sert de repli JPEG (demandé par codec{jpeg} ou imposé si l'encodeur échoue).
 //! Canaux : « frames » (images JPEG découpées, le contrôleur le crée non ordonné à fiabilité partielle : une image perdue ne retarde pas la suivante),
@@ -465,7 +467,8 @@ fn start_frames(channel: Arc<RTCDataChannel>, session: Arc<Session>) {
                 let settings = session.settings();
                 let started = Instant::now();
                 let packet = if session.use_h264() {
-                    let params = H264Params { max_width: settings.width, fps: settings.fps, kbps: h264_kbps(settings.quality) };
+                    let kbps = session.video.get().and_then(|v| v.rate.lock().ok().map(|r| r.kbps(h264_kbps(settings.quality)))).unwrap_or_else(|| h264_kbps(settings.quality));
+                    let params = H264Params { max_width: settings.width, fps: settings.fps, kbps };
                     match h264.get_or_insert_with(H264Encoder::new).encode(frame, params, session.take_keyframe_request()) {
                         Ok(encoded) => {
                             failures = 0;
@@ -551,7 +554,14 @@ fn start_frames(channel: Arc<RTCDataChannel>, session: Arc<Session>) {
                         let report = counters.report(window.elapsed().as_millis() as u64);
                         window = Instant::now();
                         if !session.stats_wanted.load(Ordering::Relaxed) { continue; }
-                        session.send_control(json!({"t": "stats", "fps": report.fps, "kbps": report.kbps, "capture_ms": report.capture_ms, "encode_ms": report.encode_ms, "dropped": report.dropped, "idle": report.idle})).await;
+                        let mut stats = json!({"t": "stats", "fps": report.fps, "kbps": report.kbps, "capture_ms": report.capture_ms, "encode_ms": report.encode_ms, "dropped": report.dropped, "idle": report.idle});
+                        if let (true, Some(video)) = (session.use_h264(), session.video.get()) {
+                            if let Ok(mut rate) = video.rate.lock() {
+                                stats["dropped"] = json!(rate.take_cuts());
+                                stats["target_kbps"] = json!(rate.kbps(h264_kbps(session.settings().quality)));
+                            }
+                        }
+                        session.send_control(stats).await;
                     }
                 }
             }

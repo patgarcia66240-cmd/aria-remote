@@ -4,7 +4,7 @@
 //!   « control » : JSON dans les deux sens (infos écran, souris, clavier).
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
 use bytes::{BufMut, Bytes, BytesMut};
@@ -22,12 +22,14 @@ use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::rtcp::payload_feedbacks::full_intra_request::FullIntraRequest;
 use webrtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
+use webrtc::rtcp::receiver_report::ReceiverReport;
 use webrtc::rtp_transceiver::rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType};
 use webrtc::rtp_transceiver::RTCPFeedback;
 use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use webrtc::track::track_local::TrackLocal;
 
 use super::signaling::{ClientMessage, IceServerConfig};
+use crate::pipeline::RateControl;
 
 /// Taille d'un morceau d'image : bien en dessous de la limite d'un message WebRTC, quel que soit le navigateur.
 pub const CHUNK: usize = 16 * 1024;
@@ -60,6 +62,8 @@ pub struct VideoOut {
     pub track: Arc<TrackLocalStaticSample>,
     /// Levé par le contrôleur (PLI/FIR : il a perdu des paquets et ne peut plus décoder) ; l'encodeur le lit et produit une image clé.
     pub keyframe_wanted: Arc<AtomicBool>,
+    /// Débit de l'encodeur, réglé d'après les pertes que le contrôleur rapporte (RTCP « receiver report ») : voir `pipeline::RateControl`.
+    pub rate: Arc<Mutex<RateControl>>,
 }
 
 impl VideoOut {
@@ -69,7 +73,7 @@ impl VideoOut {
             "video".to_owned(),
             "screen".to_owned(),
         ));
-        Self { track, keyframe_wanted: Arc::new(AtomicBool::new(true)) }
+        Self { track, keyframe_wanted: Arc::new(AtomicBool::new(true)), rate: Arc::new(Mutex::new(RateControl::new())) }
     }
 }
 
@@ -150,12 +154,20 @@ impl Peer {
         let video = if with_video {
             let video = VideoOut::new();
             let sender = pc.add_track(Arc::clone(&video.track) as Arc<dyn TrackLocal + Send + Sync>).await?;
-            let wanted = video.keyframe_wanted.clone();
+            let (wanted, rate) = (video.keyframe_wanted.clone(), video.rate.clone());
             tokio::spawn(async move {
-                // RTCP du contrôleur : PLI / FIR = « envoie une image clé ». (Il faut lire ce flux de toute façon : c'est ce qui fait tourner NACK.)
+                // RTCP du contrôleur : PLI / FIR = « envoie une image clé » ; rapport de réception = taux de perte, qui règle le débit.
+                // (Il faut lire ce flux de toute façon : c'est ce qui fait tourner NACK.)
                 while let Ok((packets, _)) = sender.read_rtcp().await {
-                    if packets.iter().any(|p| p.as_any().is::<PictureLossIndication>() || p.as_any().is::<FullIntraRequest>()) {
-                        wanted.store(true, Ordering::Relaxed);
+                    for packet in &packets {
+                        let any = packet.as_any();
+                        if any.is::<PictureLossIndication>() || any.is::<FullIntraRequest>() {
+                            wanted.store(true, Ordering::Relaxed);
+                        } else if let Some(report) = any.downcast_ref::<ReceiverReport>() {
+                            if let (Some(block), Ok(mut rate)) = (report.reports.first(), rate.lock()) {
+                                rate.on_receiver_report(block.fraction_lost);
+                            }
+                        }
                     }
                 }
             });

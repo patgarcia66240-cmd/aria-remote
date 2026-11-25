@@ -69,8 +69,29 @@ describe('infobulle des statistiques', () => {
     assert.ok(statsTitle({ rtt: 42, agent: { ...agent, dropped: 4 } }).includes('4 abandonnées'))
     assert.ok(statsTitle({ rtt: 42, agent: { ...agent, idle: true, fps: 0 } }).includes('écran fixe'))
     assert.equal(statsTitle({ rtt: 42, agent: null, codec: 'h264' }), 'latence 42 ms · vidéo H.264')
+    assert.ok(statsTitle({ rtt: 42, agent: { ...agent, target_kbps: 1100 }, codec: 'h264' }).includes("débit demandé à l'encodeur 1100 kb/s"))
+    assert.ok(!statsTitle({ rtt: 42, agent }).includes('débit demandé'), 'un agent sans H.264 ne donne pas de débit cible')
     assert.equal(statsTitle({ rtt: 42, agent: null, codec: 'jpeg' }), 'latence 42 ms · images JPEG')
     assert.equal(statsTitle({ rtt: 42, agent: null, codec: null }), 'latence 42 ms', 'agent sans H.264 : le titre est inchangé')
+  })
+})
+
+describe('qualité automatique avec la vidéo H.264', () => {
+  // En H.264, `dropped` = baisses de débit de l'agent dans la fenêtre (2 s) ; l'agent rapporte ~1 rapport de perte par seconde.
+  it("des baisses de débit répétées font passer au préréglage inférieur, comme des images abandonnées", () => {
+    const auto = new AutoQuality('balanced')
+    const sample = (dropped) => auto.sample({ rtt: 60, fps: 10, dropped, idle: false })
+    assert.equal(sample(2), null)
+    assert.equal(sample(2), null)
+    assert.equal(sample(2)?.id, 'economy')
+  })
+
+  it("une seule baisse isolée ne change rien, et une connexion calme remonte après six bons échantillons", () => {
+    const auto = new AutoQuality('economy')
+    for (let i = 0; i < 5; i += 1) assert.equal(auto.sample({ rtt: 40, fps: 5, dropped: i === 2 ? 1 : 0, idle: false }), null)
+    let next = null
+    for (let i = 0; i < 6 && !next; i += 1) next = auto.sample({ rtt: 40, fps: 5, dropped: 0, idle: false })
+    assert.equal(next?.id, 'balanced')
   })
 })
 
