@@ -1,6 +1,6 @@
 # Chantier H.264 : envoyer l'écran comme une vidéo
 
-Statut : préparation (rien d'implémenté). Point de départ : agent 1.12.0, desktop 0.5.2.
+Statut : préparation ; étape 1 (banc d'essai hors ligne) faite, voir « Résultats du banc d'essai ». Rien d'implémenté dans l'agent. Point de départ : agent 1.12.0, desktop 0.5.2.
 
 ## Objectif
 
@@ -51,6 +51,28 @@ Recommandation : commencer par A en prototype isolé (c'est le but du chantier :
 4. **Intégration contrôleur** : affichage, curseur, capture, statistiques de l'infobulle (débit, images abandonnées, latence).
 5. **Qualité automatique H.264** et réglages par préréglage.
 6. **Test réel sur Internet** (c'est la première vraie mesure, voir ci-dessous), puis publication agent + desktop.
+
+## Résultats du banc d'essai (étape 1, 25 nov. 2026)
+
+Méthode : `ffmpeg` sur cette machine Windows, 8 s à 10 images/s en 1600 px, source sans perte. `h264_mf` de ffmpeg passe par Media Foundation, comme l'encodeur prévu pour l'agent. Aucun code de l'agent n'a servi. Deux scénarios : une capture du bureau réel (très peu de mouvement) et un défilement simulé de 8 px par image. Débit en kbit/s, qualité en SSIM (1 = identique).
+
+| Scénario | JPEG q5 | JPEG q9 | Media Foundation logiciel (2 Mbit/s demandés) | `libx264` ultrafast (2 Mbit/s demandés) | NVENC p1 (2 Mbit/s demandés) |
+|---|---|---|---|---|---|
+| Bureau réel | 9 353 (0,986) | 7 043 (0,979) | 927 (0,996) | 771 (0,999) | 305 (0,999) |
+| Défilement | 8 255 (0,992) | 6 227 (0,986) | 1 040 (0,998) | 980 (0,9997) | 454 (0,999) |
+
+Lecture :
+- H.264 à qualité égale ou supérieure : environ 8 à 10 fois moins de débit avec Media Foundation logiciel (sans GPU), jusqu'à environ 25 fois avec NVENC.
+- Vitesse (80 images, 1600 px) : Media Foundation logiciel ~1,5 ms par image sur ce contenu, `libx264` ultrafast du même ordre, très en dessous des ~18 ms du JPEG actuel. NVENC a un coût de démarrage d'environ 0,8 s.
+- `h264_mf` avec `-hw_encoding 1` n'a rien produit ici : échec ou absence de support sur cette machine, à élucider.
+
+Limites (ne pas sur-interpréter) :
+- Contenu trop statique : le gain réel dépendra de l'usage.
+- `ffmpeg` encode toutes les images ; l'agent saute celles d'un écran fixe, donc l'écart réel avec JPEG sera plus petit.
+- Les réglages JPEG ne sont pas ceux de l'agent (préréglages 35, 55 et 80) : les SSIM de ce tableau ne sont pas ceux des préréglages.
+- Non mesuré : pertes de paquets, latence, pilotage du débit, conversion RGBA vers NV12.
+
+Décision : go pour l'étape 2 (prototype de transport). Le gain en débit est net même sans GPU.
 
 ## Mesures à faire AVANT de se lancer
 
